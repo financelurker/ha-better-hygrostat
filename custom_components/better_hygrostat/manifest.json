@@ -1,0 +1,18 @@
+{
+  "domain": "better_hygrostat",
+  "name": "Better Hygrostat",
+  "after_dependencies": [
+    "home_keeper"
+  ],
+  "codeowners": [
+    "@financelurker"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/financelurker/ha-better-hygrostat",
+  "integration_type": "device",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/financelurker/ha-better-hygrostat/issues",
+  "requirements": [],
+  "version": "0.0.0"
+}

@@ -1,0 +1,337 @@
+{
+  "title": "Better Hygrostat",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Room & humidifier",
+        "data": {
+          "name": "Room / name",
+          "humidity_sensor": "Humidity sensor (room)",
+          "temperature_sensor": "Temperature sensor (room)",
+          "humidifier": "Humidifier (plug or device)",
+          "humidifier_power": "Humidifier power",
+          "humidifier_power_min": "Humidifier running above"
+        },
+        "data_description": {
+          "name": "e.g. Living room",
+          "humidity_sensor": "Do not place it right next to the device.",
+          "temperature_sensor": "Used for absolute humidity and dew point.",
+          "humidifier": "switch, input_boolean, humidifier or fan.",
+          "humidifier_power": "Optional: detects 'device not responding' and counts real runtime.",
+          "humidifier_power_min": "Power above which the device counts as running."
+        }
+      },
+      "dehumidifier": {
+        "title": "Dehumidifier",
+        "data": {
+          "dehumidifier": "Dehumidifier (optional)",
+          "dehumidifier_power": "Dehumidifier power",
+          "dehumidifier_power_min": "Dehumidifier running above",
+          "dehumidifier_tank_sensor": "Tank-full sensor (dehumidifier)"
+        },
+        "data_description": {
+          "dehumidifier": "Leave empty if you have none.",
+          "dehumidifier_power": "Detects 'tank full': the device drew power and suddenly stops.",
+          "dehumidifier_power_min": "Above standby, below fan-only operation.",
+          "dehumidifier_tank_sensor": "If the device reports one (smart devices)."
+        },
+        "description": "Optional. A dehumidifier should restart by itself after a power cut and run in continuous mode."
+      },
+      "windows": {
+        "title": "Windows & doors",
+        "data": {
+          "windows": "Window and door contacts",
+          "window_open_delay": "Delay 'open'",
+          "window_close_delay": "Delay 'closed'"
+        },
+        "data_description": {
+          "windows": "On = open.",
+          "window_open_delay": "How long it must be open before switching off.",
+          "window_close_delay": "How long it must be closed before control resumes."
+        }
+      },
+      "outdoor": {
+        "title": "Outdoor climate",
+        "data": {
+          "outdoor_temperature": "Outdoor temperature",
+          "outdoor_humidity": "Outdoor humidity",
+          "weather": "Weather entity (fallback)"
+        },
+        "data_description": {
+          "outdoor_temperature": "For season and condensation limit.",
+          "outdoor_humidity": "With outdoor temperature: equivalent indoor humidity.",
+          "weather": "Used when no outdoor sensors are given."
+        },
+        "description": "Optional but recommended: drives season and condensation limit."
+      }
+    },
+    "error": {
+      "same_device": "Humidifier and dehumidifier must be different devices.",
+      "deadband": "'Dehumidify above' must be at least 5 % above the humidify target.",
+      "needs_temperature": "Outdoor humidity also needs an outdoor temperature."
+    }
+  },
+  "options": {
+    "step": {
+      "room": {
+        "title": "Room & humidifier",
+        "data": {
+          "humidity_sensor": "Humidity sensor (room)",
+          "temperature_sensor": "Temperature sensor (room)",
+          "humidifier": "Humidifier (plug or device)",
+          "humidifier_power": "Humidifier power",
+          "humidifier_power_min": "Humidifier running above"
+        },
+        "data_description": {
+          "humidity_sensor": "Do not place it right next to the device.",
+          "temperature_sensor": "Used for absolute humidity and dew point.",
+          "humidifier": "switch, input_boolean, humidifier or fan.",
+          "humidifier_power": "Optional: detects 'device not responding' and counts real runtime.",
+          "humidifier_power_min": "Power above which the device counts as running."
+        }
+      },
+      "dehumidifier": {
+        "title": "Dehumidifier",
+        "data": {
+          "dehumidifier": "Dehumidifier (optional)",
+          "dehumidifier_power": "Dehumidifier power",
+          "dehumidifier_power_min": "Dehumidifier running above",
+          "dehumidifier_tank_sensor": "Tank-full sensor (dehumidifier)"
+        },
+        "data_description": {
+          "dehumidifier": "Leave empty if you have none.",
+          "dehumidifier_power": "Detects 'tank full': the device drew power and suddenly stops.",
+          "dehumidifier_power_min": "Above standby, below fan-only operation.",
+          "dehumidifier_tank_sensor": "If the device reports one (smart devices)."
+        },
+        "description": "Optional. A dehumidifier should restart by itself after a power cut and run in continuous mode."
+      },
+      "windows": {
+        "title": "Windows & doors",
+        "data": {
+          "windows": "Window and door contacts",
+          "window_open_delay": "Delay 'open'",
+          "window_close_delay": "Delay 'closed'"
+        },
+        "data_description": {
+          "windows": "On = open.",
+          "window_open_delay": "How long it must be open before switching off.",
+          "window_close_delay": "How long it must be closed before control resumes."
+        }
+      },
+      "outdoor": {
+        "title": "Outdoor climate",
+        "data": {
+          "outdoor_temperature": "Outdoor temperature",
+          "outdoor_humidity": "Outdoor humidity",
+          "weather": "Weather entity (fallback)"
+        },
+        "data_description": {
+          "outdoor_temperature": "For season and condensation limit.",
+          "outdoor_humidity": "With outdoor temperature: equivalent indoor humidity.",
+          "weather": "Used when no outdoor sensors are given."
+        },
+        "description": "Optional but recommended: drives season and condensation limit."
+      },
+      "control": {
+        "title": "Control",
+        "data": {
+          "target_low": "Humidify target",
+          "target_high": "Dehumidify above",
+          "dry_tolerance": "Dry tolerance",
+          "wet_tolerance": "Wet tolerance",
+          "min_on": "Minimum on time",
+          "min_off": "Minimum off time",
+          "changeover_lock": "Changeover lock",
+          "sensor_stale": "Sensor stale after"
+        },
+        "data_description": {
+          "target_low": "Initial value; adjustable on the hygrostat afterwards.",
+          "target_high": "At least 5 % above the humidify target (dead band).",
+          "dry_tolerance": "On below target − tolerance.",
+          "wet_tolerance": "Off at target + tolerance.",
+          "min_on": "Windows and locks still switch off immediately.",
+          "min_off": "Protects relay/compressor.",
+          "changeover_lock": "Pause between humidifying and dehumidifying.",
+          "sensor_stale": "0 = off. Everything is switched off then."
+        }
+      },
+      "season": {
+        "title": "Season & condensation",
+        "data": {
+          "season_method": "Season detection",
+          "heating_limit": "Heating limit temperature",
+          "season_band": "Season hysteresis",
+          "condensation_limit": "Condensation limit",
+          "condensation_offset": "Shift condensation limit"
+        },
+        "data_description": {
+          "season_method": "Automatic: equivalent humidity, else heating limit, else always.",
+          "heating_limit": "24 h mean outdoor temperature below = season.",
+          "season_band": "For equivalent humidity (± around the target).",
+          "condensation_limit": "Lower the target automatically in frost.",
+          "condensation_offset": "Plus for good glazing, minus for old windows."
+        }
+      },
+      "maintenance": {
+        "title": "Maintenance & Home Keeper",
+        "data": {
+          "tank_detection": "Empty-tank detection",
+          "tank_min_runtime": "Minimum runtime before check",
+          "tank_window": "Observation window",
+          "tank_slope": "Falling threshold",
+          "tank_block": "Switch off when tank empty",
+          "cleaning_interval": "Clean every",
+          "home_keeper": "Home Keeper tasks"
+        },
+        "data_description": {
+          "tank_detection": "Via the trend of absolute humidity.",
+          "tank_slope": "If absolute humidity falls at least this fast while running, the tank is considered empty.",
+          "tank_block": "Until 'Refilled' is confirmed.",
+          "cleaning_interval": "Runtime hours; 0 = off. Season start always requests cleaning.",
+          "home_keeper": "Only if Home Keeper is installed."
+        }
+      },
+      "init": {
+        "title": "Better Hygrostat",
+        "menu_options": {
+          "room": "Room & humidifier",
+          "dehumidifier": "Dehumidifier",
+          "windows": "Windows & doors",
+          "outdoor": "Outdoor climate",
+          "control": "Control",
+          "season": "Season & condensation",
+          "maintenance": "Maintenance & Home Keeper",
+          "save": "Save"
+        }
+      }
+    },
+    "error": {
+      "same_device": "Humidifier and dehumidifier must be different devices.",
+      "deadband": "'Dehumidify above' must be at least 5 % above the humidify target.",
+      "needs_temperature": "Outdoor humidity also needs an outdoor temperature."
+    }
+  },
+  "selector": {
+    "season_method": {
+      "options": {
+        "auto": "Automatic",
+        "equivalent_humidity": "Equivalent indoor humidity",
+        "heating_limit": "Heating limit temperature",
+        "always": "Always"
+      }
+    }
+  },
+  "entity": {
+    "humidifier": {
+      "hygrostat": {
+        "state_attributes": {
+          "mode": {
+            "state": {
+              "auto": "Automatic",
+              "humidify": "Humidify only",
+              "dehumidify": "Dehumidify only"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "off": "Off",
+          "idle": "Idle",
+          "humidifying": "Humidifying",
+          "dehumidifying": "Dehumidifying",
+          "window_open": "Window open",
+          "sensor_error": "Sensor error",
+          "season_inactive": "Out of season",
+          "tank_empty": "Tank empty"
+        }
+      },
+      "absolute_humidity": {
+        "name": "Absolute humidity"
+      },
+      "dew_point": {
+        "name": "Dew point"
+      },
+      "effective_target": {
+        "name": "Effective humidify target"
+      },
+      "outdoor_equivalent_humidity": {
+        "name": "Outdoor air at room temperature"
+      },
+      "humidifier_runtime": {
+        "name": "Humidifier runtime"
+      },
+      "runtime_since_refill": {
+        "name": "Runtime since refill"
+      },
+      "runtime_since_cleaning": {
+        "name": "Runtime since cleaning"
+      },
+      "dehumidifier_runtime": {
+        "name": "Dehumidifier runtime"
+      }
+    },
+    "binary_sensor": {
+      "window_open": {
+        "name": "Window open"
+      },
+      "humidifying_season": {
+        "name": "Humidifying season"
+      },
+      "ventilation_recommended": {
+        "name": "Ventilation recommended"
+      },
+      "refill": {
+        "name": "Refill water"
+      },
+      "cleaning": {
+        "name": "Cleaning due"
+      },
+      "storage": {
+        "name": "Storage due"
+      },
+      "humidifier_fault": {
+        "name": "Humidifier not responding"
+      },
+      "dehumidifier_tank": {
+        "name": "Dehumidifier tank full"
+      },
+      "dehumidifier_fault": {
+        "name": "Dehumidifier not responding"
+      }
+    },
+    "number": {
+      "dehumidify_above": {
+        "name": "Dehumidify above"
+      }
+    },
+    "select": {
+      "season_override": {
+        "name": "Season",
+        "state": {
+          "auto": "Automatic",
+          "on": "Always active",
+          "off": "Inactive"
+        }
+      }
+    },
+    "button": {
+      "refilled": {
+        "name": "Refilled"
+      },
+      "cleaned": {
+        "name": "Cleaned"
+      },
+      "stored": {
+        "name": "Stored"
+      },
+      "dehumidifier_emptied": {
+        "name": "Dehumidifier tank emptied"
+      }
+    }
+  }
+}

@@ -1,0 +1,337 @@
+{
+  "title": "Better Hygrostat",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Raum & Befeuchter",
+        "data": {
+          "name": "Raum / Name",
+          "humidity_sensor": "Feuchtesensor (Raum)",
+          "temperature_sensor": "Temperatursensor (Raum)",
+          "humidifier": "Befeuchter (Steckdose oder Gerät)",
+          "humidifier_power": "Leistung Befeuchter",
+          "humidifier_power_min": "Befeuchter läuft ab"
+        },
+        "data_description": {
+          "name": "z. B. Wohnzimmer",
+          "humidity_sensor": "Nicht direkt neben dem Gerät platzieren.",
+          "temperature_sensor": "Für absolute Feuchte und Taupunkt.",
+          "humidifier": "switch, input_boolean, humidifier oder fan.",
+          "humidifier_power": "Optional: erkennt 'Gerät reagiert nicht' und zählt echte Laufzeit.",
+          "humidifier_power_min": "Leistung, ab der das Gerät als laufend gilt."
+        }
+      },
+      "dehumidifier": {
+        "title": "Entfeuchter",
+        "data": {
+          "dehumidifier": "Entfeuchter (optional)",
+          "dehumidifier_power": "Leistung Entfeuchter",
+          "dehumidifier_power_min": "Entfeuchter läuft ab",
+          "dehumidifier_tank_sensor": "Tank-voll-Sensor (Entfeuchter)"
+        },
+        "data_description": {
+          "dehumidifier": "Leer lassen, wenn keiner vorhanden ist.",
+          "dehumidifier_power": "Erkennt 'Tank voll': Gerät zog Strom und hört plötzlich auf.",
+          "dehumidifier_power_min": "Über dem Standby, unter dem reinen Lüfterbetrieb.",
+          "dehumidifier_tank_sensor": "Falls das Gerät einen meldet (smarte Geräte)."
+        },
+        "description": "Optional. Ein Entfeuchter sollte nach Stromausfall selbst wieder anlaufen und im Dauerbetrieb stehen."
+      },
+      "windows": {
+        "title": "Fenster & Türen",
+        "data": {
+          "windows": "Fenster- und Türkontakte",
+          "window_open_delay": "Verzögerung 'offen'",
+          "window_close_delay": "Verzögerung 'zu'"
+        },
+        "data_description": {
+          "windows": "Ein = offen.",
+          "window_open_delay": "So lange muss offen sein, bevor abgeschaltet wird.",
+          "window_close_delay": "So lange muss zu sein, bevor wieder geregelt wird."
+        }
+      },
+      "outdoor": {
+        "title": "Außenklima",
+        "data": {
+          "outdoor_temperature": "Außentemperatur",
+          "outdoor_humidity": "Außenfeuchte",
+          "weather": "Wetter-Entität (Ersatz)"
+        },
+        "data_description": {
+          "outdoor_temperature": "Für Saison und Kondensationsgrenze.",
+          "outdoor_humidity": "Mit Außentemperatur: äquivalente Innenfeuchte.",
+          "weather": "Wird verwendet, wenn keine Außensensoren angegeben sind."
+        },
+        "description": "Optional, aber empfohlen: steuert Saison und Kondensationsgrenze."
+      }
+    },
+    "error": {
+      "same_device": "Befeuchter und Entfeuchter müssen verschiedene Geräte sein.",
+      "deadband": "'Entfeuchten ab' muss mindestens 5 % über dem Befeuchtungsziel liegen.",
+      "needs_temperature": "Außenfeuchte braucht auch eine Außentemperatur."
+    }
+  },
+  "options": {
+    "step": {
+      "room": {
+        "title": "Raum & Befeuchter",
+        "data": {
+          "humidity_sensor": "Feuchtesensor (Raum)",
+          "temperature_sensor": "Temperatursensor (Raum)",
+          "humidifier": "Befeuchter (Steckdose oder Gerät)",
+          "humidifier_power": "Leistung Befeuchter",
+          "humidifier_power_min": "Befeuchter läuft ab"
+        },
+        "data_description": {
+          "humidity_sensor": "Nicht direkt neben dem Gerät platzieren.",
+          "temperature_sensor": "Für absolute Feuchte und Taupunkt.",
+          "humidifier": "switch, input_boolean, humidifier oder fan.",
+          "humidifier_power": "Optional: erkennt 'Gerät reagiert nicht' und zählt echte Laufzeit.",
+          "humidifier_power_min": "Leistung, ab der das Gerät als laufend gilt."
+        }
+      },
+      "dehumidifier": {
+        "title": "Entfeuchter",
+        "data": {
+          "dehumidifier": "Entfeuchter (optional)",
+          "dehumidifier_power": "Leistung Entfeuchter",
+          "dehumidifier_power_min": "Entfeuchter läuft ab",
+          "dehumidifier_tank_sensor": "Tank-voll-Sensor (Entfeuchter)"
+        },
+        "data_description": {
+          "dehumidifier": "Leer lassen, wenn keiner vorhanden ist.",
+          "dehumidifier_power": "Erkennt 'Tank voll': Gerät zog Strom und hört plötzlich auf.",
+          "dehumidifier_power_min": "Über dem Standby, unter dem reinen Lüfterbetrieb.",
+          "dehumidifier_tank_sensor": "Falls das Gerät einen meldet (smarte Geräte)."
+        },
+        "description": "Optional. Ein Entfeuchter sollte nach Stromausfall selbst wieder anlaufen und im Dauerbetrieb stehen."
+      },
+      "windows": {
+        "title": "Fenster & Türen",
+        "data": {
+          "windows": "Fenster- und Türkontakte",
+          "window_open_delay": "Verzögerung 'offen'",
+          "window_close_delay": "Verzögerung 'zu'"
+        },
+        "data_description": {
+          "windows": "Ein = offen.",
+          "window_open_delay": "So lange muss offen sein, bevor abgeschaltet wird.",
+          "window_close_delay": "So lange muss zu sein, bevor wieder geregelt wird."
+        }
+      },
+      "outdoor": {
+        "title": "Außenklima",
+        "data": {
+          "outdoor_temperature": "Außentemperatur",
+          "outdoor_humidity": "Außenfeuchte",
+          "weather": "Wetter-Entität (Ersatz)"
+        },
+        "data_description": {
+          "outdoor_temperature": "Für Saison und Kondensationsgrenze.",
+          "outdoor_humidity": "Mit Außentemperatur: äquivalente Innenfeuchte.",
+          "weather": "Wird verwendet, wenn keine Außensensoren angegeben sind."
+        },
+        "description": "Optional, aber empfohlen: steuert Saison und Kondensationsgrenze."
+      },
+      "control": {
+        "title": "Regelung",
+        "data": {
+          "target_low": "Befeuchtungsziel",
+          "target_high": "Entfeuchten ab",
+          "dry_tolerance": "Toleranz trocken",
+          "wet_tolerance": "Toleranz feucht",
+          "min_on": "Mindest-Einschaltzeit",
+          "min_off": "Mindest-Ausschaltzeit",
+          "changeover_lock": "Umschaltsperre",
+          "sensor_stale": "Sensor gilt als ausgefallen nach"
+        },
+        "data_description": {
+          "target_low": "Startwert; danach am Hygrostat einstellbar.",
+          "target_high": "Mindestens 5 % über dem Befeuchtungsziel (Totzone).",
+          "dry_tolerance": "Ein unter Ziel − Toleranz.",
+          "wet_tolerance": "Aus ab Ziel + Toleranz.",
+          "min_on": "Fenster und Sperren schalten trotzdem sofort ab.",
+          "min_off": "Schutz für Relais/Kompressor.",
+          "changeover_lock": "Pause zwischen Befeuchten und Entfeuchten.",
+          "sensor_stale": "0 = aus. Dann wird alles abgeschaltet."
+        }
+      },
+      "season": {
+        "title": "Saison & Kondensation",
+        "data": {
+          "season_method": "Saison-Erkennung",
+          "heating_limit": "Heizgrenztemperatur",
+          "season_band": "Saison-Hysterese",
+          "condensation_limit": "Kondensationsgrenze",
+          "condensation_offset": "Kondensationsgrenze verschieben"
+        },
+        "data_description": {
+          "season_method": "Automatisch: äquivalente Feuchte, sonst Heizgrenze, sonst immer.",
+          "heating_limit": "24-h-Mittel der Außentemperatur darunter = Saison.",
+          "season_band": "Für die äquivalente Feuchte (± um das Befeuchtungsziel).",
+          "condensation_limit": "Ziel bei Frost automatisch absenken.",
+          "condensation_offset": "Plus für gute Verglasung, Minus für alte Fenster."
+        }
+      },
+      "maintenance": {
+        "title": "Wartung & Home Keeper",
+        "data": {
+          "tank_detection": "Tank-leer-Erkennung",
+          "tank_min_runtime": "Mindestlaufzeit vor Prüfung",
+          "tank_window": "Beobachtungsfenster",
+          "tank_slope": "Abfall-Schwelle",
+          "tank_block": "Bei leerem Tank abschalten",
+          "cleaning_interval": "Reinigen alle",
+          "home_keeper": "Home-Keeper-Tasks"
+        },
+        "data_description": {
+          "tank_detection": "Über den Verlauf der absoluten Feuchte.",
+          "tank_slope": "Fällt die absolute Feuchte im Betrieb mindestens so schnell, gilt der Tank als leer.",
+          "tank_block": "Bis 'Nachgefüllt' bestätigt ist.",
+          "cleaning_interval": "Betriebsstunden; 0 = aus. Saisonstart erzeugt immer eine Reinigung.",
+          "home_keeper": "Nur wenn Home Keeper installiert ist."
+        }
+      },
+      "init": {
+        "title": "Better Hygrostat",
+        "menu_options": {
+          "room": "Raum & Befeuchter",
+          "dehumidifier": "Entfeuchter",
+          "windows": "Fenster & Türen",
+          "outdoor": "Außenklima",
+          "control": "Regelung",
+          "season": "Saison & Kondensation",
+          "maintenance": "Wartung & Home Keeper",
+          "save": "Speichern"
+        }
+      }
+    },
+    "error": {
+      "same_device": "Befeuchter und Entfeuchter müssen verschiedene Geräte sein.",
+      "deadband": "'Entfeuchten ab' muss mindestens 5 % über dem Befeuchtungsziel liegen.",
+      "needs_temperature": "Außenfeuchte braucht auch eine Außentemperatur."
+    }
+  },
+  "selector": {
+    "season_method": {
+      "options": {
+        "auto": "Automatisch",
+        "equivalent_humidity": "Äquivalente Innenfeuchte",
+        "heating_limit": "Heizgrenztemperatur",
+        "always": "Immer"
+      }
+    }
+  },
+  "entity": {
+    "humidifier": {
+      "hygrostat": {
+        "state_attributes": {
+          "mode": {
+            "state": {
+              "auto": "Automatisch",
+              "humidify": "Nur befeuchten",
+              "dehumidify": "Nur entfeuchten"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "off": "Aus",
+          "idle": "Bereit",
+          "humidifying": "Befeuchtet",
+          "dehumidifying": "Entfeuchtet",
+          "window_open": "Fenster offen",
+          "sensor_error": "Sensorfehler",
+          "season_inactive": "Außerhalb der Saison",
+          "tank_empty": "Tank leer"
+        }
+      },
+      "absolute_humidity": {
+        "name": "Absolute Feuchte"
+      },
+      "dew_point": {
+        "name": "Taupunkt"
+      },
+      "effective_target": {
+        "name": "Wirksames Befeuchtungsziel"
+      },
+      "outdoor_equivalent_humidity": {
+        "name": "Außenluft bei Raumtemperatur"
+      },
+      "humidifier_runtime": {
+        "name": "Betriebsstunden Befeuchter"
+      },
+      "runtime_since_refill": {
+        "name": "Laufzeit seit Nachfüllen"
+      },
+      "runtime_since_cleaning": {
+        "name": "Laufzeit seit Reinigung"
+      },
+      "dehumidifier_runtime": {
+        "name": "Betriebsstunden Entfeuchter"
+      }
+    },
+    "binary_sensor": {
+      "window_open": {
+        "name": "Fenster offen"
+      },
+      "humidifying_season": {
+        "name": "Befeuchtungssaison"
+      },
+      "ventilation_recommended": {
+        "name": "Lüften empfohlen"
+      },
+      "refill": {
+        "name": "Wasser nachfüllen"
+      },
+      "cleaning": {
+        "name": "Reinigung fällig"
+      },
+      "storage": {
+        "name": "Einlagern fällig"
+      },
+      "humidifier_fault": {
+        "name": "Befeuchter reagiert nicht"
+      },
+      "dehumidifier_tank": {
+        "name": "Entfeuchter-Tank voll"
+      },
+      "dehumidifier_fault": {
+        "name": "Entfeuchter reagiert nicht"
+      }
+    },
+    "number": {
+      "dehumidify_above": {
+        "name": "Entfeuchten ab"
+      }
+    },
+    "select": {
+      "season_override": {
+        "name": "Saison",
+        "state": {
+          "auto": "Automatisch",
+          "on": "Immer aktiv",
+          "off": "Inaktiv"
+        }
+      }
+    },
+    "button": {
+      "refilled": {
+        "name": "Nachgefüllt"
+      },
+      "cleaned": {
+        "name": "Gereinigt"
+      },
+      "stored": {
+        "name": "Eingelagert"
+      },
+      "dehumidifier_emptied": {
+        "name": "Entfeuchter-Tank geleert"
+      }
+    }
+  }
+}
