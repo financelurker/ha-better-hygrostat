@@ -9,6 +9,7 @@ Thanks for helping out! Bug reports and pull requests are welcome.
 - Home Keeper stays optional: talk to it only through its services and events, never by importing it.
 - New user-facing texts go into both `translations/en.json` and `translations/de.json`.
 - If a change alters what the README screenshots show, retake them (`scripts/screenshots/README.md`).
+- The brand icon is generated from `scripts/brand/icon.svg`; change the SVG and re-render (`scripts/brand/README.md`), don't edit the PNGs.
 
 Versions: the GitHub release tag is the only source of the version (see "Releases" in the README). `manifest.json` keeps the placeholder `0.0.0`; don't change it, and don't write the version anywhere else. Code that needs the version reads it from the loaded integration.
 
