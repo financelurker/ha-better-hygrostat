@@ -21,6 +21,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["D"]
+# throwaway tools for the README screenshots
+"scripts/**" = ["D", "SIM115", "ASYNC230"]
 
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
