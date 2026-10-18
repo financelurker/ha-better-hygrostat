@@ -1,0 +1,94 @@
+homeassistant:
+  name: Demo Home
+  unit_system: metric
+  time_zone: Europe/Vienna
+  country: AT
+  currency: EUR
+  language: en
+  elevation: 200
+  latitude: 48.2
+  longitude: 16.37
+
+frontend:
+config:
+http:
+onboarding:
+person:
+history:
+logbook:
+recorder:
+  purge_keep_days: 1
+  commit_interval: 1
+
+logger:
+  default: warning
+  logs:
+    custom_components.better_hygrostat: debug
+
+# The simulation (simulate.py) moves these values.
+input_number:
+  office_humidity:
+    name: Office humidity value
+    min: 20
+    max: 80
+    step: 0.01
+  humidifier_power_value:
+    name: Humidifier power value
+    min: 0
+    max: 100
+    step: 0.1
+
+input_boolean:
+  humidifier_plug_state:
+    name: Humidifier plug state
+  office_window_state:
+    name: Office window state
+
+template:
+  - switch:
+      - name: Humidifier plug
+        unique_id: humidifier_plug
+        state: "{{ is_state('input_boolean.humidifier_plug_state', 'on') }}"
+        icon: mdi:power-socket-eu
+        turn_on:
+          - action: input_boolean.turn_on
+            target: { entity_id: input_boolean.humidifier_plug_state }
+        turn_off:
+          - action: input_boolean.turn_off
+            target: { entity_id: input_boolean.humidifier_plug_state }
+    sensor:
+      - name: Office humidity
+        unique_id: office_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: "{{ states('input_number.office_humidity') | float | round(1) }}"
+      - name: Office temperature
+        unique_id: office_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "21.6"
+      - name: Humidifier power
+        unique_id: humidifier_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        state: "{{ states('input_number.humidifier_power_value') | float }}"
+      - name: Outdoor temperature
+        unique_id: outdoor_temperature
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "2.4"
+      - name: Outdoor humidity
+        unique_id: outdoor_humidity
+        unit_of_measurement: "%"
+        device_class: humidity
+        state_class: measurement
+        state: "86"
+    binary_sensor:
+      - name: Office window
+        unique_id: office_window
+        device_class: window
+        state: "{{ is_state('input_boolean.office_window_state', 'on') }}"
