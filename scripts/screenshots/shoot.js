@@ -128,14 +128,6 @@ async function clickText(page, text) {
     await page.keyboard.press('Escape');
   }
 
-  if (want('home-keeper')) {
-    await page.setViewportSize({ width: 1400, height: 800 });
-    await page.goto(`${BASE}/home-keeper`);
-    await settle(page, 5000);
-    await page.screenshot({ path: `${OUT}/home-keeper-tasks.png` });
-    console.log('home-keeper tasks');
-  }
-
   if (want('mobile')) {
     const m = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, colorScheme: 'light', isMobile: true, hasTouch: true });
     const mp = await m.newPage();

@@ -17,7 +17,7 @@ Better Hygrostat is a custom integration in the spirit of Better Thermostat. Eac
 
 Taken from a local Home Assistant instance: template sensors stand in for the room and outdoor sensors, the humidifier plug is a template switch, and a small script lets the humidity follow the plug ([how](scripts/screenshots/README.md)).
 
-**Dashboard:** the room hygrostat, what it bases its decisions on and the maintenance state. The history shows the humidifier cycling, a window being opened and, at the end, the tank running dry.
+**Dashboard:** the room hygrostat, what it bases its decisions on and the maintenance state. The history shows the humidifier cycling and pausing while a window was open.
 
 ![Dashboard](docs/images/dashboard.png)
 
@@ -28,10 +28,6 @@ Taken from a local Home Assistant instance: template sensors stand in for the ro
 **Device page:** status, climate values, problems and maintenance buttons.
 
 ![Device page](docs/images/device.png)
-
-**Home Keeper:** the refill task, managed by Better Hygrostat, on the humidifier's appliance.
-
-![Home Keeper task list](docs/images/home-keeper-tasks.png)
 
 **Setup:** one room per entry; the first step asks for the room's sensors and the humidifier.
 
