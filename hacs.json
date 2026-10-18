@@ -1,0 +1,6 @@
+{
+  "name": "Better Hygrostat",
+  "homeassistant": "2026.10.0",
+  "zip_release": true,
+  "filename": "better_hygrostat.zip"
+}

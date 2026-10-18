@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.idea/
+.vscode/
+# Home Keeper is copied in for the tests only (see .github/workflows/validate.yml)
+custom_components/home_keeper/
+scripts/screenshots/session.json
+scripts/screenshots/config/*
+!scripts/screenshots/config/configuration.yaml
