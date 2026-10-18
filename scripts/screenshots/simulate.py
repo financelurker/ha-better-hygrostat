@@ -4,8 +4,12 @@ Phase 1 (25 min): the humidifier raises the humidity while on; it falls while of
                   The window is open from minute 18 to 20.5.
 Phase 2 (until the refill problem shows): the tank is empty, the humidity falls
                   although the plug is on.
+
+Options: --phase1 MIN, --window FROM-TO (minutes, "none" for no window) and --resume
+(continue from the current humidity instead of 43.6 %).
 """
 
+import argparse
 import asyncio
 import json
 import time
@@ -15,6 +19,14 @@ import aiohttp
 BASE = "http://127.0.0.1:8123"
 H = {"Authorization": f"Bearer {json.load(open('session.json'))['token']}"}
 STEP = 10  # seconds
+
+
+ARGS = argparse.ArgumentParser()
+ARGS.add_argument("--phase1", type=float, default=25)
+ARGS.add_argument("--window", default="18-20.5")
+ARGS.add_argument("--resume", action="store_true")
+OPT = ARGS.parse_args()
+WINDOW = None if OPT.window == "none" else tuple(float(x) for x in OPT.window.split("-"))
 
 
 async def main() -> None:
@@ -27,7 +39,7 @@ async def main() -> None:
         async def action(domain, service, data):
             await s.post(f"{BASE}/api/services/{domain}/{service}", json=data)
 
-        hum = 43.6
+        hum = float(await state("input_number.office_humidity")) if OPT.resume else 43.6
         await action(
             "input_number", "set_value", {"entity_id": "input_number.office_humidity", "value": hum}
         )
@@ -44,7 +56,7 @@ async def main() -> None:
                     "value": 18.6 if plug_on else 0.4,
                 },
             )
-            want_window = 18 <= minute < 20.5
+            want_window = WINDOW is not None and WINDOW[0] <= minute < WINDOW[1]
             if want_window != window:
                 window = want_window
                 await action(
@@ -52,7 +64,7 @@ async def main() -> None:
                     "turn_on" if window else "turn_off",
                     {"entity_id": "input_boolean.office_window_state"},
                 )
-            if minute < 25:
+            if minute < OPT.phase1:
                 if window:
                     hum -= 0.14
                 elif plug_on:
