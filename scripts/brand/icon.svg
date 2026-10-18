@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4FC3F7"/>
+      <stop offset="1" stop-color="#0277BD"/>
+    </linearGradient>
+  </defs>
+  <!-- Better Hygrostat brand icon. Drawn from scratch for this project (no template or
+       third-party artwork): a droplet with a humidity dial. See scripts/brand/README.md. -->
+  <!-- droplet -->
+  <path d="M128 10 C128 10 40 108 40 160 a88 88 0 0 0 176 0 C216 108 128 10 128 10 Z" fill="url(#g)"/>
+  <!-- dial track -->
+  <path d="M78 186 A56 56 0 1 1 178 186" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="14" stroke-linecap="round"/>
+  <!-- dial value -->
+  <path d="M78 186 A56 56 0 0 1 118.3 104.9" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round"/>
+  <!-- needle -->
+  <circle cx="128" cy="160" r="11" fill="#ffffff"/>
+  <path d="M128 160 L121.6 123.6" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+</svg>
