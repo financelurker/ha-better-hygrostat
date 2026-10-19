@@ -120,6 +120,7 @@ STATUS_IDLE = "idle"
 STATUS_HUMIDIFYING = "humidifying"
 STATUS_DEHUMIDIFYING = "dehumidifying"
 STATUS_WINDOW_OPEN = "window_open"
+STATUS_WINDOW_UNKNOWN = "window_unknown"
 STATUS_SENSOR_ERROR = "sensor_error"
 STATUS_SEASON_INACTIVE = "season_inactive"
 STATUS_TANK_EMPTY = "tank_empty"
@@ -129,6 +130,7 @@ STATUSES = [
     STATUS_HUMIDIFYING,
     STATUS_DEHUMIDIFYING,
     STATUS_WINDOW_OPEN,
+    STATUS_WINDOW_UNKNOWN,
     STATUS_SENSOR_ERROR,
     STATUS_SEASON_INACTIVE,
     STATUS_TANK_EMPTY,
@@ -157,3 +159,11 @@ ORIGIN_HOME_KEEPER = "home_keeper"
 
 # power metering: how long a switched-on device may draw nothing
 POWER_GRACE_SECONDS = 180
+
+# After a Home Assistant start nothing is switched on for this long (switching off is
+# not delayed), so sensors that come up late cannot trigger a short run.
+STARTUP_HOLD_SECONDS = 30
+
+# A window/door contact that is unavailable or unknown blocks switching on; after this
+# long it is ignored (with a warning), so a dead contact does not block for good.
+CONTACT_UNAVAILABLE_IGNORE_SECONDS = 30 * 60

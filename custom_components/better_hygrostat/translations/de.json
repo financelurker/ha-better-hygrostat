@@ -245,6 +245,7 @@
           "humidifying": "Befeuchtet",
           "dehumidifying": "Entfeuchtet",
           "window_open": "Fenster offen",
+          "window_unknown": "Fensterstatus unbekannt",
           "sensor_error": "Sensorfehler",
           "season_inactive": "Außerhalb der Saison",
           "tank_empty": "Tank leer"

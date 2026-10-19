@@ -26,7 +26,14 @@ from homeassistant.const import (
     STATE_UNKNOWN,
     UnitOfTemperature,
 )
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
+from homeassistant.core import (
+    CoreState,
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
@@ -73,6 +80,7 @@ from .const import (
     CONF_WINDOW_CLOSE_DELAY,
     CONF_WINDOW_OPEN_DELAY,
     CONF_WINDOWS,
+    CONTACT_UNAVAILABLE_IGNORE_SECONDS,
     DEFAULTS,
     DOMAIN,
     ISSUE_CLEANING,
@@ -94,6 +102,7 @@ from .const import (
     SEASON_AUTO,
     SEASON_EQUIVALENT,
     SEASON_HEATING_LIMIT,
+    STARTUP_HOLD_SECONDS,
     STATUS_DEHUMIDIFYING,
     STATUS_HUMIDIFYING,
     STATUS_IDLE,
@@ -102,6 +111,7 @@ from .const import (
     STATUS_SENSOR_ERROR,
     STATUS_TANK_EMPTY,
     STATUS_WINDOW_OPEN,
+    STATUS_WINDOW_UNKNOWN,
     STORAGE_VERSION,
     TICK_SECONDS,
 )
@@ -216,10 +226,14 @@ class HygrostatController:
         self.status = STATUS_OFF
         self.tank_slope: float | None = None
 
-        # windows
-        self.window_raw_open = False
+        # windows: raw is True (a contact is open), False (all closed) or None (a contact
+        # is unavailable/unknown); window_open is the debounced state
+        self.window_raw: bool | None = False
         self.window_raw_since: float = _now()
         self.window_open = False
+        self._contact_unavailable_since: dict[str, float] = {}
+        self._contact_ignored: set[str] = set()
+        self._hold_until: float = 0.0
 
         self._last_account: float | None = None
         self._last_running: dict[str, bool] = {"hum": False, "dehum": False}
@@ -314,13 +328,28 @@ class HygrostatController:
                 dev.on_since = now
             else:
                 dev.off_since = now - 24 * 3600  # do not block the minimum off time
-        self.window_raw_open = self._read_window_raw()
-        self.window_open = self.window_raw_open
-        self.window_raw_since = now - 24 * 3600
+        # The window state survives restarts: an open window stays open until its
+        # contacts report closed and the close delay has passed.
+        self.window_open = bool(self.data.get("window_open", False))
+        self.window_raw = self._read_window_raw(now)
+        if self.window_raw is True:
+            self.window_open = True
+        self.window_raw_since = now if self.window_open and self.window_raw is False else 0.0
+        starting = self.hass.state is not CoreState.running
 
         @callback
         def _started(_hass: HomeAssistant) -> None:
             self._started = True
+            if starting:
+                self._hold_until = _now() + STARTUP_HOLD_SECONDS
+
+                @callback
+                def _hold_over(_now_dt: Any) -> None:
+                    self.hass.async_create_task(self.async_update("hold"))
+
+                self._unsubs.append(
+                    async_call_later(self.hass, STARTUP_HOLD_SECONDS + 0.5, _hold_over)
+                )
             self.hass.async_create_task(self.async_update("start"))
 
         self._unsubs.append(async_at_started(self.hass, _started))
@@ -383,24 +412,7 @@ class HygrostatController:
                     dev.last_off = now
                     dev.on_since = None
         if entity_id in self.windows:
-            raw = self._read_window_raw()
-            if raw != self.window_raw_open:
-                self.window_raw_open = raw
-                self.window_raw_since = now
-                if raw:
-                    self._reset_tank_samples(now)
-                delay = (
-                    self.opts[CONF_WINDOW_OPEN_DELAY] if raw else self.opts[CONF_WINDOW_CLOSE_DELAY]
-                )
-                if self._window_timer:
-                    self._window_timer()
-
-                @callback
-                def _fire(_now_dt: Any) -> None:
-                    self._window_timer = None
-                    self.hass.async_create_task(self.async_update("window_delay"))
-
-                self._window_timer = async_call_later(self.hass, float(delay) + 0.5, _fire)
+            self._refresh_window_raw(now)
         if self._started:
             self.hass.async_create_task(self.async_update(entity_id))
 
@@ -411,12 +423,63 @@ class HygrostatController:
 
     # ------------------------------------------------------------- reading
 
-    def _read_window_raw(self) -> bool:
+    def _read_window_raw(self, now: float) -> bool | None:
+        """Return True if a contact is open, None if one is unknown, else False."""
+        unknown = False
         for entity_id in self.windows:
             state = self.hass.states.get(entity_id)
             if state is not None and state.state == STATE_ON:
                 return True
-        return False
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                since = self._contact_unavailable_since.setdefault(entity_id, now)
+                if now - since < CONTACT_UNAVAILABLE_IGNORE_SECONDS:
+                    unknown = True
+                elif entity_id not in self._contact_ignored:
+                    self._contact_ignored.add(entity_id)
+                    _LOGGER.warning(
+                        "%s: %s has been unavailable for %d min and is ignored until it "
+                        "reports again",
+                        self.entry.title,
+                        entity_id,
+                        CONTACT_UNAVAILABLE_IGNORE_SECONDS // 60,
+                    )
+            else:
+                self._contact_unavailable_since.pop(entity_id, None)
+                self._contact_ignored.discard(entity_id)
+        return None if unknown else False
+
+    @callback
+    def _refresh_window_raw(self, now: float) -> None:
+        """Track changes of the raw contact state and arm the delay timer."""
+        raw = self._read_window_raw(now)
+        if raw == self.window_raw:
+            return
+        previous = self.window_raw
+        self.window_raw = raw
+        if raw is None:
+            return  # unknown blocks at once (see _decide); no delay to arm
+        if raw:
+            self._reset_tank_samples(now)
+        if previous is None and bool(raw) == self.window_open:
+            # A contact came back and confirms the last known state: no delay.
+            self.window_raw_since = 0.0
+            return
+        if previous is None and raw:
+            # Came back open: block at once, the window was not known to be closed.
+            self.window_open = True
+            self.window_raw_since = 0.0
+            return
+        self.window_raw_since = now
+        delay = self.opts[CONF_WINDOW_OPEN_DELAY] if raw else self.opts[CONF_WINDOW_CLOSE_DELAY]
+        if self._window_timer:
+            self._window_timer()
+
+        @callback
+        def _fire(_now_dt: Any) -> None:
+            self._window_timer = None
+            self.hass.async_create_task(self.async_update("window_delay"))
+
+        self._window_timer = async_call_later(self.hass, float(delay) + 0.5, _fire)
 
     def _read_inputs(self, now: float) -> None:
         o = self.opts
@@ -703,15 +766,22 @@ class HygrostatController:
             self._schedule_save()
         self._notify()
 
+    @property
+    def window_unknown(self) -> bool:
+        """Return whether a contact is unavailable or unknown (blocks switching on)."""
+        return bool(self.windows) and self.window_raw is None
+
     def _update_window(self, now: float) -> None:
         if not self.windows:
             self.window_open = False
             return
+        self._refresh_window_raw(now)  # also catches contacts that time out
         elapsed = now - self.window_raw_since
-        if self.window_raw_open and elapsed >= self.opts[CONF_WINDOW_OPEN_DELAY]:
+        if self.window_raw is True and elapsed >= self.opts[CONF_WINDOW_OPEN_DELAY]:
             self.window_open = True
-        elif not self.window_raw_open and elapsed >= self.opts[CONF_WINDOW_CLOSE_DELAY]:
+        elif self.window_raw is False and elapsed >= self.opts[CONF_WINDOW_CLOSE_DELAY]:
             self.window_open = False
+        self.data["window_open"] = self.window_open
 
     def _account_runtime(self, now: float) -> None:
         if self._last_account is not None:
@@ -838,7 +908,7 @@ class HygrostatController:
         if not self.opts[CONF_TANK_DETECTION]:
             return
         hum = self.humidifier
-        if not self.device_running(hum) or self.window_raw_open:
+        if not self.device_running(hum) or self.window_raw is not False:
             if self._tank_samples:
                 self._reset_tank_samples(now)
             return
@@ -903,6 +973,9 @@ class HygrostatController:
             return False, False
         if self.window_open:
             self.status = STATUS_WINDOW_OPEN
+            return False, False
+        if self.window_unknown:
+            self.status = STATUS_WINDOW_UNKNOWN
             return False, False
 
         h = float(self.humidity)  # sensor_ok guarantees a value
@@ -992,6 +1065,8 @@ class HygrostatController:
     async def _apply(self, dev: ControlledDevice, want: bool, now: float) -> None:
         if not self.device_available(dev):
             return
+        if want and now < self._hold_until:
+            return  # startup hold: switch nothing on yet
         if self.device_is_on(dev) == want:
             return
         if (

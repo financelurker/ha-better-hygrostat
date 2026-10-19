@@ -50,7 +50,7 @@ BINARY_SENSORS: list[BHBinaryDescription] = [
     BHBinaryDescription(
         key="window_open",
         device_class=BinarySensorDeviceClass.WINDOW,
-        value=lambda c: c.window_open,
+        value=lambda c: None if c.window_unknown and not c.window_open else c.window_open,
         available=lambda c: bool(c.windows),
     ),
     BHBinaryDescription(
