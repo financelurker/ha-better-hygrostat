@@ -245,6 +245,7 @@
           "humidifying": "Humidifying",
           "dehumidifying": "Dehumidifying",
           "window_open": "Window open",
+          "window_unknown": "Window state unknown",
           "sensor_error": "Sensor error",
           "season_inactive": "Out of season",
           "tank_empty": "Tank empty"

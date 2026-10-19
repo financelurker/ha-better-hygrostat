@@ -85,6 +85,7 @@ class BetterHygrostat(BetterHygrostatEntity, HumidifierEntity):
             "effective_target": round(c.effective_target_low, 1),
             "season_active": c.season_active,
             "window_open": c.window_open,
+            "window_unknown": c.window_unknown,
             "problems": [k for k in ISSUES if c.issue_active(k)],
         }
         if c.has_dehumidifier:

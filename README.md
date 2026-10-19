@@ -106,6 +106,10 @@ Later, via **Configure**, also: targets and tolerances, minimum on/off times, ch
 
 Off after a contact has been open for **45 s**, back to normal after all contacts have been closed for **10 min**. Short trips through the balcony door change nothing, and after airing the room gets time before the humidifier starts again.
 
+- **Unknown contacts block:** a contact that is unavailable or unknown, for example while its integration is still loading after a restart, keeps the devices off (status `window_unknown`). After 30 min it is ignored, with a warning in the log, so a contact with a dead battery does not block for good.
+- **Restarts:** the window state is kept. A window that was open before a restart stays open until its contacts report closed and the close delay has passed.
+- **Startup hold:** after Home Assistant starts, nothing is switched on for 30 s, so sensors that come up late cannot cause a short run. Switching off is not delayed.
+
 ### Season
 
 | Method | Season active while … |
@@ -195,6 +199,7 @@ With [Home Keeper](https://github.com/prestomation/ha-home-keeper) installed and
 | `idle` | nothing to do |
 | `humidifying` / `dehumidifying` | a device runs |
 | `window_open` | a window or door is open |
+| `window_unknown` | a window or door contact is unavailable; everything off until it reports |
 | `sensor_error` | humidity sensor unavailable or stale; everything off |
 | `season_inactive` | too dry, but outside the humidifying season |
 | `tank_empty` | humidifier blocked until *Refilled* (only with that option) |
