@@ -142,7 +142,7 @@ Values in between are interpolated. *Shift condensation limit* moves the table u
 
 | Problem | Detected when … | Resolved by |
 |---|---|---|
-| **Refill water** | the humidifier has run for 60 min, all windows are closed and the **absolute** humidity has fallen by at least 0.15 g/m³/h over 90 min | button *Refilled*, Home Keeper, or automatically once humidity clearly rises while running |
+| **Refill water** | the humidifier runs with all windows closed and either the **absolute** humidity falls (at least 0.15 g/m³/h over 90 min, after 60 min of runtime) or the run takes far longer than usual without reaching the target while humidity no longer rises (see below) | button *Refilled*, Home Keeper, or automatically once the target is reached or humidity clearly rises while running |
 | **Cleaning due** | after 250 runtime hours and at every season start | button *Cleaned* or Home Keeper |
 | **Storage due** | at season end, if the humidifier ran for at least 1 h in the season | button *Stored*, Home Keeper, or a new season start |
 | **Humidifier not responding** | the plug is on but draws no power for 3 min | automatically, once power flows again |
@@ -150,8 +150,10 @@ Values in between are interpolated. *Shift condensation limit* moves the table u
 | **Dehumidifier not responding** | the plug is on and it never draws power | automatically |
 
 - **Absolute, not relative humidity:** when the room warms by 2 °C, relative humidity drops by about 6 points without any water missing. Absolute humidity stays the same.
-- **Falling, not just not rising:** a device that is too weak levels off below the target. An empty tank shows as humidity that falls although the humidifier runs.
-- **Calibrate** with the sensors *Absolute humidity* and *Status* (attribute `tank_slope_g_m3_h`) during the first weeks. False alarms: make the threshold more negative or the window longer. Late detection: move the threshold towards 0.
+- **Two rules.** A clear drop is caught by the *falling* rule. In many rooms an empty tank only shows as a slow drop (about −0.4 % RH per hour) that then levels off; the *long run* rule catches that: it learns how long a normal run takes to reach the target (median of the last runs) and raises the problem once a run takes **4 times as long, at least 2 hours** (*Long run without reaching the target*), while absolute humidity has not risen over the last hour. Without learned runs it waits 3 times the option (6 hours by default).
+- **Weak devices** that need long runs learn long runs, and a run that still makes progress never counts as empty.
+- **Interruptions:** an open window starts the measurement over (airing changes the room), and the run's time pauses while the window is open. Short pauses (a power dip, a restart, up to 10 min) only pause the measurement. The measurement survives restarts.
+- **Calibrate** with the *Status* sensor's attributes: `tank_slope_g_m3_h`, `run_without_target_min`, `long_run_limit_min` and `typical_run_min`. False alarms: make the falling threshold more negative or *Long run* longer. Late detection: the opposite.
 - *Runtime since refill* learns how long a tank lasts (attribute `typical_tank_runtime_h`).
 - **Optionally switch off** when the tank is empty, until *Refilled* is confirmed.
 

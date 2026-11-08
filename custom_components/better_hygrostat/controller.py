@@ -69,6 +69,7 @@ from .const import (
     CONF_SENSOR_STALE,
     CONF_TANK_BLOCK,
     CONF_TANK_DETECTION,
+    CONF_TANK_LONG_RUN,
     CONF_TANK_MIN_RUNTIME,
     CONF_TANK_SLOPE,
     CONF_TANK_WINDOW,
@@ -122,6 +123,17 @@ OUTDOOR_SAMPLE_SECONDS = 600  # one outdoor sample every 10 min for the 24 h mea
 OUTDOOR_HISTORY_SECONDS = 24 * 3600
 TANK_SAMPLE_SECONDS = 60
 TANK_CLEAR_WINDOW_SECONDS = 30 * 60
+# A measurement series survives pauses up to this long (power dip, restart, short
+# forced-off); longer pauses start a new series.
+TANK_PAUSE_MAX_SECONDS = 10 * 60
+# Long-run rule: absolute humidity must not have risen over this last stretch ...
+TANK_LONG_RUN_CHECK_SECONDS = 60 * 60
+# ... by more than this (g/m³ per hour); a weak device that still makes progress is fine.
+TANK_LONG_RUN_RISE_EPS = 0.05
+# Long-run limit = max(option, factor x typical run); without learned runs: 3 x option.
+TANK_LONG_RUN_FACTOR = 4
+TANK_LONG_RUN_NO_HISTORY_FACTOR = 3
+RUN_HISTORY_MAX = 20
 COMMAND_RETRY_SECONDS = 60
 REFILL_HISTORY_MAX = 10
 
@@ -237,8 +249,6 @@ class HygrostatController:
 
         self._last_account: float | None = None
         self._last_running: dict[str, bool] = {"hum": False, "dehum": False}
-        self._tank_samples: list[tuple[float, float]] = []
-        self._tank_reset_at: float = _now()
 
     # ------------------------------------------------------------------ setup
 
@@ -279,6 +289,11 @@ class HygrostatController:
             "hum_since_clean_s": 0.0,
             "dehum_total_s": 0.0,
             "refill_history_h": [],
+            # tank detection; persisted so a restart does not start over
+            "tank_samples": [],  # [ts, absolute humidity] while running, windows closed
+            "tank_since": None,  # start of the current series
+            "hum_unsatisfied_s": 0.0,  # runtime since the off threshold was last reached
+            "run_history_min": [],  # runtimes of runs that reached the off threshold
             "issues": {},
             "hk_tasks": {},
             **stored,
@@ -661,6 +676,26 @@ class HygrostatController:
         return round(statistics.median(hist), 1) if hist else None
 
     @property
+    def typical_run_min(self) -> float | None:
+        """Return the median runtime a run needs to reach the target (min 3 runs)."""
+        hist = self.data.get("run_history_min") or []
+        return round(statistics.median(hist), 1) if len(hist) >= 3 else None
+
+    @property
+    def long_run_limit_s(self) -> float:
+        """Return the runtime without reaching the target that counts as an empty tank."""
+        option = float(self.opts[CONF_TANK_LONG_RUN]) * 60
+        typical = self.typical_run_min
+        if typical is None:
+            return TANK_LONG_RUN_NO_HISTORY_FACTOR * option
+        return max(option, TANK_LONG_RUN_FACTOR * typical * 60)
+
+    @property
+    def off_threshold(self) -> float:
+        """Return the humidity at which a humidify run normally ends."""
+        return self.effective_target_low + float(self.opts[CONF_WET_TOLERANCE])
+
+    @property
     def ventilation_recommended(self) -> bool | None:
         """Return whether airing would dry the room for free."""
         if self.outdoor_abs_humidity is None or self.abs_humidity is None:
@@ -711,12 +746,7 @@ class HygrostatController:
         """Mark an issue as resolved (button, Home Keeper or detected automatically)."""
         now = _now()
         if key == ISSUE_REFILL:
-            if self.issue_active(ISSUE_REFILL):
-                hist = list(self.data.get("refill_history_h") or [])
-                hist.append(round(self.data["hum_since_refill_s"] / 3600.0, 2))
-                self.data["refill_history_h"] = hist[-REFILL_HISTORY_MAX:]
-            self.data["hum_since_refill_s"] = 0.0
-            self._reset_tank_samples(now)
+            self._refilled(now)
         elif key == ISSUE_CLEANING:
             self.data["hum_since_clean_s"] = 0.0
         self._clear_issue(key, origin)
@@ -789,6 +819,10 @@ class HygrostatController:
             if self._last_running["hum"]:
                 for key in ("hum_total_s", "hum_since_refill_s", "hum_since_clean_s"):
                     self.data[key] = float(self.data.get(key, 0.0)) + dt
+                if self.humidity is not None and self.humidity < self.off_threshold:
+                    self.data["hum_unsatisfied_s"] = (
+                        float(self.data.get("hum_unsatisfied_s", 0.0)) + dt
+                    )
                 if self.season_active:
                     self.data["season_runtime_s"] = (
                         float(self.data.get("season_runtime_s", 0.0)) + dt
@@ -900,59 +934,108 @@ class HygrostatController:
             self._raise_issue(fault_key, "no_power")
 
     def _reset_tank_samples(self, now: float) -> None:
-        self._tank_samples = []
-        self._tank_reset_at = now
+        """Start a new measurement series (window opened, run complete, refilled)."""
+        self.data["tank_samples"] = []
+        self.data["tank_since"] = None
         self.tank_slope = None
 
+    def _refilled(self, now: float) -> None:
+        """Book a refill: remember the tank runtime and reset the counters."""
+        if self.issue_active(ISSUE_REFILL):
+            hist = list(self.data.get("refill_history_h") or [])
+            hist.append(round(self.data["hum_since_refill_s"] / 3600.0, 2))
+            self.data["refill_history_h"] = hist[-REFILL_HISTORY_MAX:]
+        self.data["hum_since_refill_s"] = 0.0
+        self.data["hum_unsatisfied_s"] = 0.0
+        self._reset_tank_samples(now)
+
     def _check_tank(self, now: float) -> None:
+        """Detect an empty tank: humidity falling, or a run far longer than usual.
+
+        Samples of the absolute humidity are taken while the humidifier runs and all
+        windows are closed. Short pauses only interrupt the series; an open window, a
+        complete run (off threshold reached) or a refill start a new one.
+        """
         if not self.opts[CONF_TANK_DETECTION]:
             return
         hum = self.humidifier
-        if not self.device_running(hum) or self.window_raw is not False:
-            if self._tank_samples:
+        samples: list = self.data.setdefault("tank_samples", [])
+
+        # A run that reaches the off threshold ends normally: learn its runtime.
+        if self.sensor_ok and self.humidity is not None and self.humidity >= self.off_threshold:
+            unsatisfied = float(self.data.get("hum_unsatisfied_s", 0.0))
+            # a run that needed a refill is not a usual run: do not learn it
+            if unsatisfied >= 60 and not self.issue_active(ISSUE_REFILL):
+                hist = list(self.data.get("run_history_min") or [])
+                hist.append(round(unsatisfied / 60.0, 1))
+                self.data["run_history_min"] = hist[-RUN_HISTORY_MAX:]
+            self.data["hum_unsatisfied_s"] = 0.0
+            if self.issue_active(ISSUE_REFILL) and self.device_running(hum):
+                self._refilled(now)
+                self._clear_issue(ISSUE_REFILL, ORIGIN_AUTO)
+            if samples:
                 self._reset_tank_samples(now)
             return
-        if self.abs_humidity is None:
+
+        if self.window_raw is not False:
+            if samples:
+                self._reset_tank_samples(now)
             return
-        if not self._tank_samples or now - self._tank_samples[-1][0] >= TANK_SAMPLE_SECONDS:
-            self._tank_samples.append((now, self.abs_humidity))
+        if not self.device_running(hum) or self.abs_humidity is None:
+            if samples and now - samples[-1][0] > TANK_PAUSE_MAX_SECONDS:
+                self._reset_tank_samples(now)
+            return
+
+        if not samples or now - samples[-1][0] >= TANK_SAMPLE_SECONDS:
+            samples.append([now, round(self.abs_humidity, 4)])
+        if self.data.get("tank_since") is None:
+            self.data["tank_since"] = now
         window_s = float(self.opts[CONF_TANK_WINDOW]) * 60
-        keep_s = max(window_s, TANK_CLEAR_WINDOW_SECONDS)
-        self._tank_samples = [s for s in self._tank_samples if s[0] >= now - keep_s]
+        keep_s = max(window_s, TANK_CLEAR_WINDOW_SECONDS, TANK_LONG_RUN_CHECK_SECONDS)
+        samples[:] = [x for x in samples if x[0] >= now - keep_s]
+
+        def fit(seconds: float) -> tuple[float | None, float]:
+            part = [(x[0], x[1]) for x in samples if x[0] >= now - seconds]
+            if len(part) < 3:
+                return None, 0.0
+            return physics.slope_per_hour(part), part[-1][0] - part[0][0]
 
         threshold = float(self.opts[CONF_TANK_SLOPE])
-        if not self.issue_active(ISSUE_REFILL):
-            start = max(hum.on_since or now, self._tank_reset_at, self.window_raw_since)
-            samples = [s for s in self._tank_samples if s[0] >= now - window_s]
-            if len(samples) < 3:
-                return
-            self.tank_slope = physics.slope_per_hour(samples)
-            span = samples[-1][0] - samples[0][0]
-            if (
-                now - start >= float(self.opts[CONF_TANK_MIN_RUNTIME]) * 60
-                and span >= 0.9 * window_s
-                and self.tank_slope is not None
-                and self.tank_slope <= threshold
-            ):
-                self._raise_issue(ISSUE_REFILL, "humidity_falling")
-        else:
+        if self.issue_active(ISSUE_REFILL):
             # resolved automatically once absolute humidity clearly rises while running
-            samples = [s for s in self._tank_samples if s[0] >= now - TANK_CLEAR_WINDOW_SECONDS]
-            if len(samples) < 3:
-                return
-            self.tank_slope = physics.slope_per_hour(samples)
-            span = samples[-1][0] - samples[0][0]
+            slope, span = fit(TANK_CLEAR_WINDOW_SECONDS)
+            self.tank_slope = slope
             if (
-                span >= 0.8 * TANK_CLEAR_WINDOW_SECONDS
-                and self.tank_slope is not None
-                and self.tank_slope >= abs(threshold)
+                slope is not None
+                and span >= 0.8 * TANK_CLEAR_WINDOW_SECONDS
+                and slope >= abs(threshold)
             ):
-                hist = list(self.data.get("refill_history_h") or [])
-                hist.append(round(self.data["hum_since_refill_s"] / 3600.0, 2))
-                self.data["refill_history_h"] = hist[-REFILL_HISTORY_MAX:]
-                self.data["hum_since_refill_s"] = 0.0
-                self._reset_tank_samples(now)  # drop the old "falling" samples
+                self._refilled(now)
                 self._clear_issue(ISSUE_REFILL, ORIGIN_AUTO)
+            return
+
+        # 1) humidity falls although the humidifier runs
+        slope, span = fit(window_s)
+        self.tank_slope = slope
+        since = float(self.data["tank_since"])
+        if (
+            slope is not None
+            and now - since >= float(self.opts[CONF_TANK_MIN_RUNTIME]) * 60
+            and span >= 0.9 * window_s
+            and slope <= threshold
+        ):
+            self._raise_issue(ISSUE_REFILL, "humidity_falling")
+            return
+
+        # 2) the run takes far longer than usual and humidity no longer rises
+        rise, span = fit(TANK_LONG_RUN_CHECK_SECONDS)
+        if (
+            float(self.data.get("hum_unsatisfied_s", 0.0)) >= self.long_run_limit_s
+            and rise is not None
+            and span >= 0.8 * TANK_LONG_RUN_CHECK_SECONDS
+            and rise <= TANK_LONG_RUN_RISE_EPS
+        ):
+            self._raise_issue(ISSUE_REFILL, "long_run")
 
     def _check_cleaning(self) -> None:
         interval_h = float(self.opts[CONF_CLEANING_INTERVAL])

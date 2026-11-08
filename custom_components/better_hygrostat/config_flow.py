@@ -36,6 +36,7 @@ from .const import (
     CONF_SENSOR_STALE,
     CONF_TANK_BLOCK,
     CONF_TANK_DETECTION,
+    CONF_TANK_LONG_RUN,
     CONF_TANK_MIN_RUNTIME,
     CONF_TANK_SLOPE,
     CONF_TANK_WINDOW,
@@ -187,6 +188,9 @@ def schema_maintenance() -> vol.Schema:
             ),
             vol.Optional(CONF_TANK_WINDOW, default=d[CONF_TANK_WINDOW]): _num(15, 240, 5, "min"),
             vol.Optional(CONF_TANK_SLOPE, default=d[CONF_TANK_SLOPE]): _num(-2, 0, 0.01, "g/m³/h"),
+            vol.Optional(CONF_TANK_LONG_RUN, default=d[CONF_TANK_LONG_RUN]): _num(
+                30, 720, 10, "min"
+            ),
             vol.Optional(CONF_TANK_BLOCK, default=d[CONF_TANK_BLOCK]): _bool(),
             vol.Optional(CONF_CLEANING_INTERVAL, default=d[CONF_CLEANING_INTERVAL]): _num(
                 0, 2000, 10, "h"
