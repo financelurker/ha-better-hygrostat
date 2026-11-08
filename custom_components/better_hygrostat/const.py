@@ -65,6 +65,7 @@ CONF_TANK_MIN_RUNTIME = "tank_min_runtime"  # minutes
 CONF_TANK_WINDOW = "tank_window"  # minutes
 CONF_TANK_SLOPE = "tank_slope"  # g/m³ per hour (negative = falling)
 CONF_TANK_BLOCK = "tank_block"
+CONF_TANK_LONG_RUN = "tank_long_run"  # minutes
 CONF_CLEANING_INTERVAL = "cleaning_interval"  # runtime hours, 0 = off
 CONF_HOME_KEEPER = "home_keeper"
 
@@ -98,6 +99,7 @@ DEFAULTS: dict = {
     CONF_TANK_WINDOW: 90,
     CONF_TANK_SLOPE: -0.15,
     CONF_TANK_BLOCK: False,
+    CONF_TANK_LONG_RUN: 120,
     CONF_CLEANING_INTERVAL: 250,
     CONF_HOME_KEEPER: True,
 }

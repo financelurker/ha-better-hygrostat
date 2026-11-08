@@ -180,6 +180,7 @@
           "tank_min_runtime": "Mindestlaufzeit vor Prüfung",
           "tank_window": "Beobachtungsfenster",
           "tank_slope": "Abfall-Schwelle",
+          "tank_long_run": "Lange Laufzeit ohne Zielerreichung",
           "tank_block": "Bei leerem Tank abschalten",
           "cleaning_interval": "Reinigen alle",
           "home_keeper": "Home-Keeper-Tasks"
@@ -187,6 +188,7 @@
         "data_description": {
           "tank_detection": "Über den Verlauf der absoluten Feuchte.",
           "tank_slope": "Fällt die absolute Feuchte im Betrieb mindestens so schnell, gilt der Tank als leer.",
+          "tank_long_run": "Läuft der Befeuchter länger als dieser Wert (bzw. 4× die gelernte übliche Laufzeit, je nachdem was länger ist), ohne das Ziel zu erreichen, und steigt die Feuchte nicht mehr, gilt der Tank als leer. Ohne gelernte Läufe: 3× dieser Wert.",
           "tank_block": "Bis 'Nachgefüllt' bestätigt ist.",
           "cleaning_interval": "Betriebsstunden; 0 = aus. Saisonstart erzeugt immer eine Reinigung.",
           "home_keeper": "Nur wenn Home Keeper installiert ist."

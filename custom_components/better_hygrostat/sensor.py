@@ -50,7 +50,12 @@ SENSORS: list[BHSensorDescription] = [
         device_class=SensorDeviceClass.ENUM,
         options=STATUSES,
         value=lambda c: c.status,
-        attrs=lambda c: {"tank_slope_g_m3_h": _r(c.tank_slope, 3)},
+        attrs=lambda c: {
+            "tank_slope_g_m3_h": _r(c.tank_slope, 3),
+            "run_without_target_min": round(float(c.data.get("hum_unsatisfied_s", 0.0)) / 60),
+            "long_run_limit_min": round(c.long_run_limit_s / 60),
+            "typical_run_min": c.typical_run_min,
+        },
     ),
     BHSensorDescription(
         key="absolute_humidity",

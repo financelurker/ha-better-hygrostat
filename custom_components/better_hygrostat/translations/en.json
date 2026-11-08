@@ -180,6 +180,7 @@
           "tank_min_runtime": "Minimum runtime before check",
           "tank_window": "Observation window",
           "tank_slope": "Falling threshold",
+          "tank_long_run": "Long run without reaching the target",
           "tank_block": "Switch off when tank empty",
           "cleaning_interval": "Clean every",
           "home_keeper": "Home Keeper tasks"
@@ -187,6 +188,7 @@
         "data_description": {
           "tank_detection": "Via the trend of absolute humidity.",
           "tank_slope": "If absolute humidity falls at least this fast while running, the tank is considered empty.",
+          "tank_long_run": "A run longer than this (or 4× the learned usual runtime, whichever is longer) without reaching the target, while humidity no longer rises, counts as an empty tank. Without learned runs: 3× this value.",
           "tank_block": "Until 'Refilled' is confirmed.",
           "cleaning_interval": "Runtime hours; 0 = off. Season start always requests cleaning.",
           "home_keeper": "Only if Home Keeper is installed."
