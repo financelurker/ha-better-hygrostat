@@ -88,3 +88,51 @@ async def test_deleted_monitoring_task_is_not_created_again(hass: HomeAssistant,
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert set(await _tasks(hass)) == {"refill", "storage"}
+
+
+async def test_fault_task_names(hass: HomeAssistant, plugs) -> None:
+    await _setup_hk(hass)
+    base_states(hass, 50)
+    hass.states.async_set(POWER, 0.4, {"unit_of_measurement": "W"})
+    await setup_room(hass, humidifier_power=POWER)
+    assert (await _tasks(hass))["humidifier_fault"][
+        "name"
+    ] == "Living Room: Humidifier not responding"
+
+
+async def test_old_fault_task_name_is_renamed(hass: HomeAssistant, plugs) -> None:
+    """A task named by an earlier version gets the new name; its history stays."""
+    await _setup_hk(hass)
+    base_states(hass, 50)
+    hass.states.async_set(POWER, 0.4, {"unit_of_measurement": "W"})
+    entry = await setup_room(hass, humidifier_power=POWER)
+    task = (await _tasks(hass))["humidifier_fault"]
+    await hass.services.async_call(
+        "home_keeper",
+        "update_task",
+        {"task_id": task["id"], "name": "Living Room: Check humidifier"},
+        blocking=True,
+    )
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    renamed = (await _tasks(hass))["humidifier_fault"]
+    assert renamed["id"] == task["id"]
+    assert renamed["name"] == "Living Room: Humidifier not responding"
+    assert len(renamed["completions"]) == 1
+
+
+async def test_own_task_name_is_kept(hass: HomeAssistant, plugs) -> None:
+    await _setup_hk(hass)
+    base_states(hass, 50)
+    hass.states.async_set(POWER, 0.4, {"unit_of_measurement": "W"})
+    entry = await setup_room(hass, humidifier_power=POWER)
+    task = (await _tasks(hass))["humidifier_fault"]
+    await hass.services.async_call(
+        "home_keeper",
+        "update_task",
+        {"task_id": task["id"], "name": "Luftwäscher Strom prüfen"},
+        blocking=True,
+    )
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert (await _tasks(hass))["humidifier_fault"]["name"] == "Luftwäscher Strom prüfen"
