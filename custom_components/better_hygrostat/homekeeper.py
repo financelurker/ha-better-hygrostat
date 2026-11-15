@@ -42,7 +42,8 @@ from .controller import HygrostatController
 
 _LOGGER = logging.getLogger(__name__)
 
-# Task names of earlier versions; such tasks are renamed, names the user chose are kept.
+# Task names of earlier versions (also with "<room>: " in front); such tasks are renamed,
+# names the user chose are kept.
 _OLD_NAMES: dict[str, set[str]] = {
     ISSUE_HUM_FAULT: {"Check humidifier", "Befeuchter prüfen"},
     ISSUE_DEHUM_FAULT: {"Check dehumidifier", "Entfeuchter prüfen"},
@@ -229,8 +230,14 @@ class HomeKeeperGlue:
         return lang if lang in _TEXTS else "en"
 
     def _text(self, key: str) -> tuple[str, str]:
-        name, notes = _TEXTS[self._lang()][key]
-        return f"{self.entry.title}: {name}", notes
+        # No room in the name: the task hangs on the room's appliance, and Home Assistant
+        # would cut a name that starts with the appliance's name ("not responding").
+        return _TEXTS[self._lang()][key]
+
+    def _default_names(self, key: str) -> set[str]:
+        """Names Better Hygrostat has given this task in any version or language."""
+        names = {texts[key][0] for texts in _TEXTS.values()} | _OLD_NAMES.get(key, set())
+        return names | {f"{self.entry.title}: {name}" for name in names}
 
     def _roles(self) -> list[str]:
         return [ROLE_HUM, ROLE_DEHUM] if self.ctrl.has_dehumidifier else [ROLE_HUM]
@@ -464,9 +471,9 @@ class HomeKeeperGlue:
 
         for key, task in found.items():
             # rename tasks that still carry a name of an earlier version
-            old = {f"{self.entry.title}: {name}" for name in _OLD_NAMES.get(key, ())}
-            if task.get("name") in old:
-                await self._call("update_task", {"task_id": task["id"], "name": self._text(key)[0]})
+            name = self._text(key)[0]
+            if task.get("name") != name and task.get("name") in self._default_names(key):
+                await self._call("update_task", {"task_id": task["id"], "name": name})
 
             # attach to the right appliance (also migrates tasks from 0.1.0)
             want = self._task_device(key)

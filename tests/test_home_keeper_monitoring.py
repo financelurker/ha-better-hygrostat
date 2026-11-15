@@ -43,7 +43,7 @@ async def test_monitoring_tasks_exist_from_the_start(hass: HomeAssistant, plugs)
         assert task["managed_by"]["integration"] == DOMAIN
         assert len(task["completions"]) == 1
         assert task["completions"][0]["note"] == "Monitoring started - no work done yet."
-    assert tasks["refill"]["name"] == "Living Room: Refill water"
+    assert tasks["refill"]["name"] == "Refill water"  # no room: the appliance says where
 
 
 async def test_fault_task_with_a_power_sensor(hass: HomeAssistant, plugs) -> None:
@@ -60,7 +60,7 @@ async def test_german_monitoring_note(hass: HomeAssistant, plugs) -> None:
     base_states(hass, 50)
     await setup_room(hass, title="Büro")
     tasks = await _tasks(hass)
-    assert tasks["refill"]["name"] == "Büro: Wasser nachfüllen"
+    assert tasks["refill"]["name"] == "Wasser nachfüllen"
     assert tasks["refill"]["completions"][0]["note"].startswith("Überwachung gestartet")
 
 
@@ -95,9 +95,7 @@ async def test_fault_task_names(hass: HomeAssistant, plugs) -> None:
     base_states(hass, 50)
     hass.states.async_set(POWER, 0.4, {"unit_of_measurement": "W"})
     await setup_room(hass, humidifier_power=POWER)
-    assert (await _tasks(hass))["humidifier_fault"][
-        "name"
-    ] == "Living Room: Humidifier not responding"
+    assert (await _tasks(hass))["humidifier_fault"]["name"] == "Humidifier not responding"
 
 
 async def test_old_fault_task_name_is_renamed(hass: HomeAssistant, plugs) -> None:
@@ -117,7 +115,7 @@ async def test_old_fault_task_name_is_renamed(hass: HomeAssistant, plugs) -> Non
     await hass.async_block_till_done()
     renamed = (await _tasks(hass))["humidifier_fault"]
     assert renamed["id"] == task["id"]
-    assert renamed["name"] == "Living Room: Humidifier not responding"
+    assert renamed["name"] == "Humidifier not responding"
     assert len(renamed["completions"]) == 1
 
 
@@ -136,3 +134,25 @@ async def test_own_task_name_is_kept(hass: HomeAssistant, plugs) -> None:
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert (await _tasks(hass))["humidifier_fault"]["name"] == "Luftwäscher Strom prüfen"
+
+
+async def test_room_prefix_is_removed_from_existing_tasks(hass: HomeAssistant, plugs) -> None:
+    """Tasks named "<room>: <task>" by earlier versions lose the room; history stays."""
+    await _setup_hk(hass)
+    base_states(hass, 50)
+    entry = await setup_room(hass)
+    tasks = await _tasks(hass)
+    for key, old in (
+        ("refill", "Living Room: Refill water"),
+        ("cleaning", "Living Room: Clean humidifier"),
+    ):
+        await hass.services.async_call(
+            "home_keeper", "update_task", {"task_id": tasks[key]["id"], "name": old}, blocking=True
+        )
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    after = await _tasks(hass)
+    assert after["refill"]["name"] == "Refill water"
+    assert after["cleaning"]["name"] == "Clean humidifier"
+    assert after["refill"]["id"] == tasks["refill"]["id"]
+    assert len(after["refill"]["completions"]) == 1
