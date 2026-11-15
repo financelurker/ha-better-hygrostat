@@ -45,8 +45,8 @@ async def test_empty_tank_home_keeper_roundtrip(hass: HomeAssistant, freezer, pl
     assert hass.states.get(refill).state == "off"
     assert float(hass.states.get(since_refill).state) == 0.0
     assert hass.states.get(since_refill).attributes["history_h"]
-    # no echo loop: exactly one completion
-    assert len(hk.tasks[task["id"]]["completions"]) == 1
+    # no echo loop: "monitoring started" + exactly one completion by the user
+    assert len(hk.tasks[task["id"]]["completions"]) == 2
 
 
 async def test_empty_tank_auto_clear_completes_task(hass: HomeAssistant, freezer, plugs) -> None:
@@ -62,7 +62,7 @@ async def test_empty_tank_auto_clear_completes_task(hass: HomeAssistant, freezer
     await advance(hass, freezer, 35 * 60, humidity_step=0.08)
     assert hass.states.get(refill).state == "off"
     assert hk.tasks[task["id"]]["next_due"] is None  # completed in HK (dormant)
-    assert len(hk.tasks[task["id"]]["completions"]) == 1
+    assert len(hk.tasks[task["id"]]["completions"]) == 2  # "monitoring started" + this
 
 
 async def test_button_resolves_and_completes_task(hass: HomeAssistant, freezer, plugs) -> None:
@@ -121,7 +121,12 @@ async def test_reconcile_completion_while_unloaded(hass: HomeAssistant, freezer,
     await hass.async_block_till_done()
     assert hass.states.get(eid(hass, entry, "binary_sensor", "refill")).state == "off"
     # no duplicate task on restart
-    assert len([t for t in hk.tasks.values() if (t.get("source") or {}).get(DOMAIN)]) == 1
+    refill_tasks = [
+        t
+        for t in hk.tasks.values()
+        if ((t.get("source") or {}).get(DOMAIN) or {}).get("issue") == "refill"
+    ]
+    assert len(refill_tasks) == 1
 
 
 async def test_season_end_requests_storage(hass: HomeAssistant, freezer, plugs) -> None:

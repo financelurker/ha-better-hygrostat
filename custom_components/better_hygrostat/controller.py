@@ -134,6 +134,14 @@ TANK_LONG_RUN_RISE_EPS = 0.05
 TANK_LONG_RUN_FACTOR = 4
 TANK_LONG_RUN_NO_HISTORY_FACTOR = 3
 RUN_HISTORY_MAX = 20
+# Peak rule: absolute humidity this far (g/m³) below the run's peak, the peak at least
+# this long ago, and still falling over the last 60 and 30 minutes.
+TANK_PEAK_DROP = 0.15
+TANK_PEAK_HOLD_SECONDS = 60 * 60
+TANK_PEAK_FALL_SLOPE = -0.05
+# Store the state at least this often while running (and at once when it matters).
+SAVE_INTERVAL_SECONDS = 5 * 60
+_SAVE_AT_ONCE = {"start", "hold", "enabled", "mode", "target_low", "target_high", "season_override"}
 COMMAND_RETRY_SECONDS = 60
 REFILL_HISTORY_MAX = 10
 
@@ -249,6 +257,9 @@ class HygrostatController:
 
         self._last_account: float | None = None
         self._last_running: dict[str, bool] = {"hum": False, "dehum": False}
+        self._last_tank_running = False
+        self._last_save: float = 0.0
+        self._save_now = False
 
     # ------------------------------------------------------------------ setup
 
@@ -292,6 +303,7 @@ class HygrostatController:
             # tank detection; persisted so a restart does not start over
             "tank_samples": [],  # [ts, absolute humidity] while running, windows closed
             "tank_since": None,  # start of the current series
+            "tank_peak": None,  # [ts, absolute humidity] highest sample of the series
             "hum_unsatisfied_s": 0.0,  # runtime since the off threshold was last reached
             "run_history_min": [],  # runtimes of runs that reached the off threshold
             "issues": {},
@@ -402,8 +414,16 @@ class HygrostatController:
             cb()
 
     @callback
-    def _schedule_save(self) -> None:
-        self._store.async_delay_save(lambda: self.data, 30)
+    def _schedule_save(self, now: float) -> None:
+        """Store the state every few minutes, and at once after important changes.
+
+        Asking for a delayed save on every evaluation would never write: Home
+        Assistant's Store moves a pending delayed write back with every new request.
+        """
+        if self._save_now or now - self._last_save >= SAVE_INTERVAL_SECONDS:
+            self._save_now = False
+            self._last_save = now
+            self._store.async_delay_save(lambda: self.data, 1)
 
     # -------------------------------------------------------------- events
 
@@ -676,6 +696,16 @@ class HygrostatController:
         return round(statistics.median(hist), 1) if hist else None
 
     @property
+    def tank_running(self) -> bool:
+        """Return whether the humidifier counts as running for the tank detection.
+
+        The plug being on is enough: the power of an evaporative humidifier says
+        nothing about its water. Only a device that draws no power at all (the
+        "not responding" problem) does not count.
+        """
+        return self.device_is_on(self.humidifier) and not self.issue_active(ISSUE_HUM_FAULT)
+
+    @property
     def typical_run_min(self) -> float | None:
         """Return the median runtime a run needs to reach the target (min 3 runs)."""
         hist = self.data.get("run_history_min") or []
@@ -760,6 +790,7 @@ class HygrostatController:
         if issue.get("active"):
             return
         issue.update({"active": True, "since": dt_util.utcnow().isoformat(), "reason": reason})
+        self._save_now = True
         _LOGGER.info("%s: issue '%s' raised (%s)", self.entry.title, key, reason)
         for cb in list(self._issue_listeners):
             cb(key, True, reason)
@@ -770,6 +801,7 @@ class HygrostatController:
         if not issue.get("active"):
             return
         issue.update({"active": False, "since": None, "reason": None})
+        self._save_now = True
         _LOGGER.info("%s: issue '%s' resolved (%s)", self.entry.title, key, origin)
         for cb in list(self._issue_listeners):
             cb(key, False, origin)
@@ -793,7 +825,9 @@ class HygrostatController:
                 await self._apply(self.humidifier, want_hum, now)
                 if self.dehumidifier is not None:
                     await self._apply(self.dehumidifier, want_dehum, now)
-            self._schedule_save()
+            if reason in _SAVE_AT_ONCE or reason.startswith("resolve_"):
+                self._save_now = True
+            self._schedule_save(now)
         self._notify()
 
     @property
@@ -819,17 +853,20 @@ class HygrostatController:
             if self._last_running["hum"]:
                 for key in ("hum_total_s", "hum_since_refill_s", "hum_since_clean_s"):
                     self.data[key] = float(self.data.get(key, 0.0)) + dt
-                if self.humidity is not None and self.humidity < self.off_threshold:
-                    self.data["hum_unsatisfied_s"] = (
-                        float(self.data.get("hum_unsatisfied_s", 0.0)) + dt
-                    )
                 if self.season_active:
                     self.data["season_runtime_s"] = (
                         float(self.data.get("season_runtime_s", 0.0)) + dt
                     )
             if self._last_running["dehum"]:
                 self.data["dehum_total_s"] = float(self.data.get("dehum_total_s", 0.0)) + dt
+            if (
+                self._last_tank_running
+                and self.humidity is not None
+                and self.humidity < self.off_threshold
+            ):
+                self.data["hum_unsatisfied_s"] = float(self.data.get("hum_unsatisfied_s", 0.0)) + dt
         self._last_account = now
+        self._last_tank_running = self.tank_running
         self._last_running = {
             "hum": self.device_running(self.humidifier),
             "dehum": self.device_running(self.dehumidifier),
@@ -937,6 +974,7 @@ class HygrostatController:
         """Start a new measurement series (window opened, run complete, refilled)."""
         self.data["tank_samples"] = []
         self.data["tank_since"] = None
+        self.data["tank_peak"] = None
         self.tank_slope = None
 
     def _refilled(self, now: float) -> None:
@@ -958,7 +996,6 @@ class HygrostatController:
         """
         if not self.opts[CONF_TANK_DETECTION]:
             return
-        hum = self.humidifier
         samples: list = self.data.setdefault("tank_samples", [])
 
         # A run that reaches the off threshold ends normally: learn its runtime.
@@ -970,7 +1007,7 @@ class HygrostatController:
                 hist.append(round(unsatisfied / 60.0, 1))
                 self.data["run_history_min"] = hist[-RUN_HISTORY_MAX:]
             self.data["hum_unsatisfied_s"] = 0.0
-            if self.issue_active(ISSUE_REFILL) and self.device_running(hum):
+            if self.issue_active(ISSUE_REFILL) and self.tank_running:
                 self._refilled(now)
                 self._clear_issue(ISSUE_REFILL, ORIGIN_AUTO)
             if samples:
@@ -981,13 +1018,16 @@ class HygrostatController:
             if samples:
                 self._reset_tank_samples(now)
             return
-        if not self.device_running(hum) or self.abs_humidity is None:
+        if not self.tank_running or self.abs_humidity is None:
             if samples and now - samples[-1][0] > TANK_PAUSE_MAX_SECONDS:
                 self._reset_tank_samples(now)
             return
 
         if not samples or now - samples[-1][0] >= TANK_SAMPLE_SECONDS:
             samples.append([now, round(self.abs_humidity, 4)])
+            peak = self.data.get("tank_peak")
+            if peak is None or self.abs_humidity > peak[1]:
+                self.data["tank_peak"] = [now, round(self.abs_humidity, 4)]
         if self.data.get("tank_since") is None:
             self.data["tank_since"] = now
         window_s = float(self.opts[CONF_TANK_WINDOW]) * 60
@@ -1014,15 +1054,19 @@ class HygrostatController:
                 self._clear_issue(ISSUE_REFILL, ORIGIN_AUTO)
             return
 
-        # 1) humidity falls although the humidifier runs
+        # 1) humidity falls although the humidifier runs - and still falls now, so the
+        #    decay after moisture from elsewhere (shower, cooking) does not count
         slope, span = fit(window_s)
         self.tank_slope = slope
+        fall_30, span_30 = fit(30 * 60)
         since = float(self.data["tank_since"])
         if (
             slope is not None
             and now - since >= float(self.opts[CONF_TANK_MIN_RUNTIME]) * 60
             and span >= 0.9 * window_s
             and slope <= threshold
+            and fall_30 is not None
+            and fall_30 <= TANK_PEAK_FALL_SLOPE
         ):
             self._raise_issue(ISSUE_REFILL, "humidity_falling")
             return
@@ -1036,6 +1080,27 @@ class HygrostatController:
             and rise <= TANK_LONG_RUN_RISE_EPS
         ):
             self._raise_issue(ISSUE_REFILL, "long_run")
+            return
+
+        # 3) humidity has fallen clearly below this run's peak and keeps falling slowly
+        #    (independent of learned runs and of the runtime counter; a fast drop is
+        #    left to rule 1)
+        peak = self.data.get("tank_peak")
+        if peak is None or now - peak[0] < TANK_PEAK_HOLD_SECONDS:
+            return
+        recent = [x[1] for x in samples if x[0] >= now - 10 * 60]
+        fall_60, span_60 = fit(TANK_LONG_RUN_CHECK_SECONDS)
+        if (
+            recent
+            and statistics.fmean(recent) <= peak[1] - TANK_PEAK_DROP
+            and fall_60 is not None
+            and fall_30 is not None
+            and span_60 >= 0.8 * TANK_LONG_RUN_CHECK_SECONDS
+            and span_30 >= 0.8 * 30 * 60
+            and threshold < fall_60 <= TANK_PEAK_FALL_SLOPE
+            and fall_30 <= TANK_PEAK_FALL_SLOPE
+        ):
+            self._raise_issue(ISSUE_REFILL, "below_peak")
 
     def _check_cleaning(self) -> None:
         interval_h = float(self.opts[CONF_CLEANING_INTERVAL])
