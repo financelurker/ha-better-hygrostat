@@ -22,6 +22,17 @@ async def _setup_real_hk(hass: HomeAssistant) -> None:
     assert hass.services.has_service("home_keeper", "add_task")
 
 
+def _issue(task: dict) -> str:
+    return task["source"][DOMAIN]["issue"]
+
+
+async def _task(hass: HomeAssistant, issue: str) -> dict:
+    """Return the one task of *issue* (monitoring tasks of the others exist too)."""
+    matching = [t for t in await _tasks(hass) if _issue(t) == issue]
+    assert len(matching) == 1, f"{len(matching)} tasks for {issue}"
+    return matching[0]
+
+
 async def _tasks(hass: HomeAssistant) -> list[dict]:
     resp = await hass.services.async_call(
         "home_keeper", "list_tasks", {}, blocking=True, return_response=True
@@ -37,9 +48,7 @@ async def test_real_home_keeper_roundtrip(hass: HomeAssistant, freezer, plugs) -
     refill = eid(hass, entry, "binary_sensor", "refill")
     assert hass.states.get(refill).state == "on"
 
-    tasks = await _tasks(hass)
-    assert len(tasks) == 1
-    task = tasks[0]
+    task = await _task(hass, "refill")
     assert task["next_due"] is not None
     assert task["managed_by"]["integration"] == DOMAIN
 
@@ -49,16 +58,14 @@ async def test_real_home_keeper_roundtrip(hass: HomeAssistant, freezer, plugs) -
     )
     await hass.async_block_till_done()
     assert hass.states.get(refill).state == "off"
-    task = (await _tasks(hass))[0]
+    task = await _task(hass, "refill")
     assert task["next_due"] is None
-    assert len(task["completions"]) == 1
+    assert len(task["completions"]) == 2  # "monitoring started" + the user's; no echo
 
     # empty again -> the same task is armed again
     await advance(hass, freezer, 95 * 60, humidity_step=-0.05)
     assert hass.states.get(refill).state == "on"
-    tasks = await _tasks(hass)
-    assert len(tasks) == 1
-    assert tasks[0]["next_due"] is not None
+    assert (await _task(hass, "refill"))["next_due"] is not None
 
 
 async def test_home_keeper_loaded_later(hass: HomeAssistant, freezer, plugs) -> None:
@@ -70,9 +77,7 @@ async def test_home_keeper_loaded_later(hass: HomeAssistant, freezer, plugs) -> 
 
     await _setup_real_hk(hass)
     await advance(hass, freezer, 120)  # allow for a retry
-    tasks = await _tasks(hass)
-    assert len(tasks) == 1
-    assert tasks[0]["next_due"] is not None
+    assert (await _task(hass, "refill"))["next_due"] is not None
 
 
 # ------------------------------------------------------------- Appliances (0.2)
@@ -120,7 +125,7 @@ async def test_appliance_created_and_tasks_attached(hass: HomeAssistant, freezer
 
     # issue -> the task hangs on the appliance's device
     await advance(hass, freezer, 95 * 60, humidity_step=-0.08)
-    task = (await _tasks(hass))[0]
+    task = await _task(hass, "refill")
     assert task["device_id"] == asset["device_id"]
 
     # the name can be changed freely and survives a reload
@@ -195,12 +200,11 @@ async def test_migrates_v01_task_to_appliance(hass: HomeAssistant, freezer, plug
     hass.config_entries.async_update_entry(entry, options=opts)
     await hass.async_block_till_done()
 
-    tasks = await _tasks(hass)
+    task = await _task(hass, "refill")  # exactly one: the old one was kept, not duplicated
     asset = (await _assets(hass))[0]
-    assert len(tasks) == 1
-    assert tasks[0]["id"] == old_id
-    assert tasks[0]["device_id"] == asset["device_id"]
-    assert tasks[0]["source"][DOMAIN]["device_id"] == asset["device_id"]
+    assert task["id"] == old_id
+    assert task["device_id"] == asset["device_id"]
+    assert task["source"][DOMAIN]["device_id"] == asset["device_id"]
 
 
 async def test_user_deleted_appliance_is_respected(hass: HomeAssistant, freezer, plugs) -> None:
@@ -221,7 +225,7 @@ async def test_user_deleted_appliance_is_respected(hass: HomeAssistant, freezer,
     room = dr.async_get(hass).async_get_device_by_identifier(
         (DOMAIN, entry.entry_id), entry.entry_id
     )
-    assert (await _tasks(hass))[0]["device_id"] == room.id
+    assert {t["device_id"] for t in await _tasks(hass)} == {room.id}
 
 
 async def test_remove_entry_releases_appliance(hass: HomeAssistant, freezer, plugs) -> None:
@@ -229,7 +233,7 @@ async def test_remove_entry_releases_appliance(hass: HomeAssistant, freezer, plu
     base_states(hass, 40)
     entry = await setup_room(hass)
     await advance(hass, freezer, 95 * 60, humidity_step=-0.08)
-    assert len(await _tasks(hass)) == 1
+    assert (await _task(hass, "refill"))["next_due"] is not None
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert await _tasks(hass) == []

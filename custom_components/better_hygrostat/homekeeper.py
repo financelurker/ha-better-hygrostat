@@ -27,6 +27,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_TANK_DETECTION,
     DOMAIN,
     ISSUE_CLEANING,
     ISSUE_DEHUM_FAULT,
@@ -40,6 +41,16 @@ from .const import (
 from .controller import HygrostatController
 
 _LOGGER = logging.getLogger(__name__)
+
+# Wait this long after Home Keeper deleted an appliance before moving its tasks.
+ASSET_DELETE_SETTLE_SECONDS = 5
+
+# Note on the first completion of a task created for monitoring: Home Keeper creates
+# triggered tasks armed, and complete_task is its documented way to make one dormant.
+_MONITOR_NOTE = {
+    "de": "Überwachung gestartet – noch keine Arbeit erledigt.",
+    "en": "Monitoring started - no work done yet.",
+}
 
 HK = "home_keeper"
 EVENT_COMPLETED = "home_keeper_task_completed"
@@ -181,6 +192,26 @@ class HomeKeeperGlue:
     @property
     def _assets(self) -> dict[str, str]:
         return self.ctrl.data.setdefault("hk_assets", {})
+
+    @property
+    def _tasks_declined(self) -> list[str]:
+        """Issues whose monitoring task the user deleted (do not create it again)."""
+        return self.ctrl.data.setdefault("hk_tasks_declined", [])
+
+    def _monitored_issues(self) -> list[str]:
+        """Issues that get a task in Home Keeper right away, dormant until they occur."""
+        c = self.ctrl
+        keys = [ISSUE_CLEANING, ISSUE_STORAGE]
+        if c.opts[CONF_TANK_DETECTION]:
+            keys.insert(0, ISSUE_REFILL)
+        if c.humidifier.power_entity:
+            keys.append(ISSUE_HUM_FAULT)
+        if c.dehumidifier is not None:
+            if c.dehumidifier.power_entity or c.dehumidifier.tank_sensor:
+                keys.append(ISSUE_DEHUM_TANK)
+            if c.dehumidifier.power_entity:
+                keys.append(ISSUE_DEHUM_FAULT)
+        return keys
 
     @property
     def _declined(self) -> list[str]:
@@ -399,8 +430,17 @@ class HomeKeeperGlue:
                 self._asset_devices.pop(role, None)
                 if role not in self._declined:
                     self._declined.append(role)
-                # move the tasks back to the room device
-                self.hass.async_create_task(self.async_reconcile())
+
+                # Move the tasks back to the room device - but only once Home Keeper has
+                # finished deleting: changing a task's device reloads Home Keeper, which
+                # would abort its own delete that is still running.
+                @callback
+                def _later(_now: Any) -> None:
+                    self.hass.async_create_task(self.async_reconcile())
+
+                self._unsubs.append(
+                    async_call_later(self.hass, ASSET_DELETE_SETTLE_SECONDS, _later)
+                )
 
     # --------------------------------------------------------------- tasks
 
@@ -443,7 +483,22 @@ class HomeKeeperGlue:
         for key in self.ctrl.data["issues"]:
             if self.ctrl.issue_active(key) and key not in self._tasks:
                 await self._arm_unlocked(key)
+        # Monitoring: every relevant task exists from the start, dormant.
+        for key in self._monitored_issues():
+            if key not in self._tasks and key not in self._tasks_declined:
+                await self._create_dormant(key)
         return True
+
+    async def _create_dormant(self, key: str) -> None:
+        """Create a task that shows under Monitored until its problem occurs."""
+        await self._arm_unlocked(key)
+        task_id = self._tasks.get(key)
+        if task_id is None:
+            return
+        await self._call(
+            "complete_task",
+            {"task_id": task_id, "origin": DOMAIN, "note": _MONITOR_NOTE[self._lang()]},
+        )
 
     @callback
     def _on_issue(self, key: str, active: bool, origin: str) -> None:
@@ -498,6 +553,8 @@ class HomeKeeperGlue:
         for key, tid in list(self._tasks.items()):
             if tid == task_id:
                 self._tasks.pop(key)
+                if key not in self._tasks_declined:
+                    self._tasks_declined.append(key)
 
 
 async def async_release(hass: HomeAssistant, stored: dict) -> None:

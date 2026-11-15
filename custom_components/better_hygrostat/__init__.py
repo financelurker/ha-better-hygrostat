@@ -35,6 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BetterHygrostatConfigEnt
     else:
         # turning Home Keeper off and on again re-creates deleted appliances
         controller.data["hk_assets_declined"] = []
+        controller.data["hk_tasks_declined"] = []
 
     entry.runtime_data = RuntimeData(controller, glue)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -142,7 +142,7 @@ Values in between are interpolated. *Shift condensation limit* moves the table u
 
 | Problem | Detected when … | Resolved by |
 |---|---|---|
-| **Refill water** | the humidifier runs with all windows closed and either the **absolute** humidity falls (at least 0.15 g/m³/h over 90 min, after 60 min of runtime) or the run takes far longer than usual without reaching the target while humidity no longer rises (see below) | button *Refilled*, Home Keeper, or automatically once the target is reached or humidity clearly rises while running |
+| **Refill water** | the humidifier's plug is on, all windows are closed and one of three rules fires: the **absolute** humidity falls clearly, the run takes far longer than usual, or humidity has fallen well below this run's peak (see below) | button *Refilled*, Home Keeper, or automatically once the target is reached or humidity clearly rises while running |
 | **Cleaning due** | after 250 runtime hours and at every season start | button *Cleaned* or Home Keeper |
 | **Storage due** | at season end, if the humidifier ran for at least 1 h in the season | button *Stored*, Home Keeper, or a new season start |
 | **Humidifier not responding** | the plug is on but draws no power for 3 min | automatically, once power flows again |
@@ -150,9 +150,15 @@ Values in between are interpolated. *Shift condensation limit* moves the table u
 | **Dehumidifier not responding** | the plug is on and it never draws power | automatically |
 
 - **Absolute, not relative humidity:** when the room warms by 2 °C, relative humidity drops by about 6 points without any water missing. Absolute humidity stays the same.
-- **Two rules.** A clear drop is caught by the *falling* rule. In many rooms an empty tank only shows as a slow drop (about −0.4 % RH per hour) that then levels off; the *long run* rule catches that: it learns how long a normal run takes to reach the target (median of the last runs) and raises the problem once a run takes **4 times as long, at least 2 hours** (*Long run without reaching the target*), while absolute humidity has not risen over the last hour. Without learned runs it waits 3 times the option (6 hours by default).
+- **Three rules,** each enough on its own:
+  - *Falling:* absolute humidity falls by at least 0.15 g/m³/h over 90 min (after 60 min of runtime) and is still falling over the last 30 min. The second condition keeps the decay after moisture from elsewhere (a shower, cooking) from counting.
+  - *Long run:* it learns how long a normal run takes to reach the target (median of the last runs) and fires once a run takes **4 times as long, at least 2 hours** (*Long run without reaching the target*), while absolute humidity has not risen over the last hour. Without learned runs it waits 3 times the option (6 hours by default).
+  - *Below peak:* absolute humidity has been below this run's peak by at least 0.15 g/m³ (about 0.8 % RH) for an hour and is still falling slowly. This rule needs no learned runs and no runtime counter; a fast drop is left to the *falling* rule.
+- In many rooms an empty tank only shows as a slow drop (about −0.4 to −0.7 % RH per hour) after a short rise. The tests replay two such real nights.
+- **Running** means the plug is on: the power of an evaporative humidifier says nothing about its water. Only a device that draws no power at all (*Humidifier not responding*) does not count.
 - **Weak devices** that need long runs learn long runs, and a run that still makes progress never counts as empty.
-- **Interruptions:** an open window starts the measurement over (airing changes the room), and the run's time pauses while the window is open. Short pauses (a power dip, a restart, up to 10 min) only pause the measurement. The measurement survives restarts.
+- **Interruptions:** an open window starts the measurement over (airing changes the room), and the run's time pauses while the window is open. Short pauses (a restart, up to 10 min) only pause the measurement.
+- **Restarts:** the measurement is stored every 5 minutes and at once when a problem appears or is resolved, so even a crash or power cut loses at most a few minutes.
 - **Calibrate** with the *Status* sensor's attributes: `tank_slope_g_m3_h`, `run_without_target_min`, `long_run_limit_min` and `typical_run_min`. False alarms: make the falling threshold more negative or *Long run* longer. Late detection: the opposite.
 - *Runtime since refill* learns how long a tank lasts (attribute `typical_tank_runtime_h`).
 - **Optionally switch off** when the tank is empty, until *Refilled* is confirmed.
@@ -162,7 +168,7 @@ Values in between are interpolated. *Shift condensation limit* moves the table u
 With [Home Keeper](https://github.com/prestomation/ha-home-keeper) installed and the option *Home Keeper tasks* on (default):
 
 - **Appliances:** one per device, for example *Office: Humidifier* and *Office: Dehumidifier*, as virtual devices managed by Better Hygrostat, linked to the plug and the room. Name, manufacturer, model, manual, cost and parts are yours to edit; Better Hygrostat changes none of them.
-- **Tasks:** every problem from the table above becomes a triggered task on the matching appliance. A task appears the first time its problem occurs and is then armed and cleared again, so its history accumulates.
+- **Tasks:** every problem from the table above has a triggered task on the matching appliance, **created right at setup** and dormant until its problem occurs, so it shows under **Monitored** from the start. Home Keeper creates triggered tasks armed; Better Hygrostat makes them dormant the documented way, with a first completion noted as *Monitoring started - no work done yet*. Then each task is armed and cleared again, so its history accumulates. A task you delete is not created again (turn *Home Keeper tasks* off and on to get it back).
 - **Both directions:** completing a task in Home Keeper resolves the problem here and resets its counter (for example *Runtime since refill*); resolving it here (button or automatically) completes the task.
 - **Consumables:** add the hygiene additive to the humidifier's appliance as a *consumable* part with stock and pick it as *Linked consumable* on the cleaning task. Every completed cleaning then takes one off the stock, and Home Keeper can create a buy task when you run low.
 - **Deleting an appliance** in Home Keeper is respected; its tasks move to the room device. Turn *Home Keeper tasks* off and on again to get it back.
