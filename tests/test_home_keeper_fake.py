@@ -155,7 +155,7 @@ async def test_german_task_names(hass: HomeAssistant, freezer, plugs) -> None:
     entry = await setup_room(hass, title="Wohnzimmer")
     await advance(hass, freezer, 95 * 60, humidity_step=-0.08)
     task = hk.get_task_by_source(DOMAIN, entry_id=entry.entry_id, issue="refill")
-    assert task["name"] == "Wohnzimmer: Wasser nachfüllen"
+    assert task["name"] == "Wasser nachfüllen"
 
 
 async def test_english_task_names(hass: HomeAssistant, freezer, plugs) -> None:
@@ -164,4 +164,4 @@ async def test_english_task_names(hass: HomeAssistant, freezer, plugs) -> None:
     entry = await setup_room(hass)
     await advance(hass, freezer, 95 * 60, humidity_step=-0.08)
     task = hk.get_task_by_source(DOMAIN, entry_id=entry.entry_id, issue="refill")
-    assert task["name"] == "Living Room: Refill water"
+    assert task["name"] == "Refill water"
