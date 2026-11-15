@@ -42,6 +42,12 @@ from .controller import HygrostatController
 
 _LOGGER = logging.getLogger(__name__)
 
+# Task names of earlier versions; such tasks are renamed, names the user chose are kept.
+_OLD_NAMES: dict[str, set[str]] = {
+    ISSUE_HUM_FAULT: {"Check humidifier", "Befeuchter prüfen"},
+    ISSUE_DEHUM_FAULT: {"Check dehumidifier", "Entfeuchter prüfen"},
+}
+
 # Wait this long after Home Keeper deleted an appliance before moving its tasks.
 ASSET_DELETE_SETTLE_SECONDS = 5
 
@@ -76,7 +82,7 @@ _TEXTS: dict[str, dict[str, tuple[str, str]]] = {
             "trocknen lassen und einlagern. Kein Wasser über den Sommer stehen lassen.",
         ),
         ISSUE_HUM_FAULT: (
-            "Befeuchter prüfen",
+            "Befeuchter reagiert nicht",
             "Die Steckdose ist eingeschaltet, aber das Gerät nimmt keine Leistung auf "
             "(Geräteschalter aus, Stecker gezogen, defekt?).",
         ),
@@ -85,7 +91,7 @@ _TEXTS: dict[str, dict[str, tuple[str, str]]] = {
             "Der Entfeuchter hat sich abgeschaltet – vermutlich ist der Tank voll.",
         ),
         ISSUE_DEHUM_FAULT: (
-            "Entfeuchter prüfen",
+            "Entfeuchter reagiert nicht",
             "Die Steckdose ist eingeschaltet, aber das Gerät nimmt keine Leistung auf.",
         ),
     },
@@ -104,7 +110,7 @@ _TEXTS: dict[str, dict[str, tuple[str, str]]] = {
             "The humidifying season is over: clean, dry completely and store the device.",
         ),
         ISSUE_HUM_FAULT: (
-            "Check humidifier",
+            "Humidifier not responding",
             "The plug is on but the device draws no power.",
         ),
         ISSUE_DEHUM_TANK: (
@@ -112,7 +118,7 @@ _TEXTS: dict[str, dict[str, tuple[str, str]]] = {
             "The dehumidifier stopped - its tank is probably full.",
         ),
         ISSUE_DEHUM_FAULT: (
-            "Check dehumidifier",
+            "Dehumidifier not responding",
             "The plug is on but the device draws no power.",
         ),
     },
@@ -457,6 +463,11 @@ class HomeKeeperGlue:
         self._tasks.update({k: t["id"] for k, t in found.items()})
 
         for key, task in found.items():
+            # rename tasks that still carry a name of an earlier version
+            old = {f"{self.entry.title}: {name}" for name in _OLD_NAMES.get(key, ())}
+            if task.get("name") in old:
+                await self._call("update_task", {"task_id": task["id"], "name": self._text(key)[0]})
+
             # attach to the right appliance (also migrates tasks from 0.1.0)
             want = self._task_device(key)
             if want and task.get("device_id") != want:
